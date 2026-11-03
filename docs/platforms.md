@@ -51,6 +51,9 @@
   - 这三项**只能在本机 GUI 里授权**，SSH 远程无法代授；授权后需要重启被授权的进程
   - 检测：`AXIsProcessTrusted()`；未授权时 `caps` 报 `accessibility: false`，daemon 以只读模式运行
 
+- **⚠️ 通过 SSH 启动的进程，不享受 Terminal 的 TCC 授权**：TCC 按"责任进程"归属，`sshd → bash → ddir-mac` 这条链上的授权对象是 `sshd`/二进流本体，给 Terminal.app 打钩没用。远程调试时会看到 `-1743 (not authorized to send Apple events)` 或 AX 操作全部失败，即使你已经给终端授权了。
+  → 正确做法：**macOS 后端做成一个 `.app` bundle + LaunchAgent**（登录后在 GUI 会话里常驻），TCC 授权打在这个 bundle 上，只授权一次、长期有效；SSH 只用来构建、看日志、触发 CLI（CLI 通过自建的本地 socket 找 daemon，而不是自己去碰 AX）。
+
 ### 2.3 Linux
 
 按会话类型分档，**daemon 启动时检测 `XDG_SESSION_TYPE`**：
@@ -126,3 +129,19 @@
 
 我这边需要的全部信息：`ssh 用户名@IP`、你的 Mac 是否 Apple Silicon、macOS 版本（`sw_vers` 一条命令即可）。
 拿到之后我可以先在 Mac 上跑只读探针（枚举窗口/显示器/权限状态），确认 `caps` 再决定先做哪一块。
+
+### 6.1 实践进度（2026-11-03）
+
+- 目标机：`Antonio Liang@192.168.1.88`（用户名带空格，命令行要写成 `"Antonio Liang"@192.168.1.88`）
+- 22 端口已开、ping 通；服务器接受 `publickey,password,keyboard-interactive`
+- 本机已生成密钥 `F:\envs\ssh\id_ddir`（ed25519，无口令），`~/.ssh/config` 里加了 `Host ddir-mac`
+- **待办**：把公钥追加到 Mac 的 `~/.ssh/authorized_keys`（见下），之后统一用 `ssh ddir-mac` 免密登录
+
+```bash
+# 在 Mac 的 Terminal 里执行一次（公钥来自 F:\envs\ssh\id_ddir.pub）
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+echo 'ssh-ed25519 AAAA... ddir@windows' >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+> 提醒：即使 SSH 通了，`ddir-mac` 也不要由 SSH 直接启动（TCC 归属问题，见 §2.2）。先用 SSH 做构建、跑只读探针、看日志；真正带窗口控制能力的 daemon 用 `.app` + LaunchAgent 在 GUI 会话里跑。

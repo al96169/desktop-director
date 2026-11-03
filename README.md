@@ -1,4 +1,4 @@
-# Desktop Director
+﻿# Desktop Director
 
 > **桌面导播台**：把 Windows 桌面当成演播室，把窗口当成信号源，让多个 Agent 轮流"上播"而互不打架。
 
@@ -7,16 +7,39 @@
 | 产品名 | Desktop Director |
 | 中文名 | 桌面导播台 |
 | 命令 / 可执行 | `ddir`（`ddir daemon` 常驻，`ddir <cmd>` 是客户端，同一个 exe） |
-| 状态目录 | `~/.ddir/`（config.json / apps.json / audit.jsonl / state.json） |
-| 本机 IPC | 命名管道 `\\.\pipe\ddir`；HTTP `127.0.0.1:7717`（给跨语言适配器 / 看板） |
+| 状态目录 | `~/.ddir/`（`mode.txt` / `leases.tsv` / `apps.tsv` / `audit.tsv`） |
+| 形态 | v0.1 是**单文件 CLI**（每次调用读写 `~/.ddir`）；常驻 daemon + 管道 / MCP 在 M3 之后 |
 | 平台 | **Windows / macOS / Linux 三平台**（协议一份，后端各一份；能力差异见 [docs/platforms.md](docs/platforms.md)） |
-| 设计报告 | `F:\obsidian_vault\everythink\项目\个人项目\Agent桌面自动化窗口调整&多Agent窗口协调软件\研究分析报告.md` |
+| 设计报告 | `docs/design.md` |
 
 ---
 
 ## 一句话
 
 **给屏幕和软件发租约**：谁要用哪块屏、哪个窗口、哪个软件，先向 `ddir` 申请；拿不到就换方案，而不是互相抢。用户永远是最高优先级，且可以物理隔离（把几块屏收回来自己用）。
+
+## 快速开始（Windows x64）
+
+```powershell
+# 1) 安装（加 PATH、建 ~/.ddir、跑自检）
+powershell -ExecutionPolicy Bypass -File dist\install.ps1
+
+# 2) 新开一个终端
+ddir mode              # off / semi / auto
+ddir list --text       # 过滤到 Alt-Tab 级的窗口列表
+ddir selftest          # 平台能力自检（7 项）
+
+# 3) 给 Agent 装上规矩（可选）
+powershell -ExecutionPolicy Bypass -File dist\install.ps1 -WithPrompt
+```
+
+从源码构建（MinGW-w64 + cargo，环境见 `docs/toolchain.md`）：
+
+```cmd
+call tools\dev-env.cmd
+cargo build --release
+target\release\ddir.exe selftest
+```
 
 ## 三档模式
 
@@ -53,13 +76,13 @@
 | # | 里程碑 | 状态 |
 |---|---|---|
 | M0 | 提示词包（`prompts/AGENTS.m0.md`），零安装验证观感 | ✅ **Gate G0 通过**：4/4 任务（DSH×2、Trae×1、隐藏场景×1），见 `docs/m0-observations.md` |
-| M1 | 只读 daemon：枚举/过滤/快照/`ddir plan --dry-run` | 🔶 参考实现跑通（list/displays/status/plan）；Rust 版待工具链 |
-| M2 | semi 可写：窗口租约 + 用户所有权 + 撤销栈 | 🔶 简版可用：`move/claim/release` 像素级还原、`hide/show`、`close`（仅自己 own 过）、活跃信号 `user_active` |
+| M1 | 只读：枚举/过滤/显示器/`ddir plan --dry-run` | ✅ **Rust 0.1.0**（338KB 单 exe）：`list/displays/status/plan/selftest` |
+| M2 | semi 可写：窗口租约 + 用户所有权 + 撤销 | ✅ `claim/move/hide/show/close/release/own`，`release` 像素级还原，`user_active` 冷却 |
 | M2.2 | 屏幕托管：`display_uid` + 托盘勾选 + 借用/热插拔 | 未开始（当前单屏 + 静态托管策略） |
 | M2.5 | auto 处决：武装倒计时 + `WM_CLOSE` 管道 + `undo-close` | 未开始 |
 | M3 | 托盘三档 | 未开始 |
 | M4 | HUD 装饰层（缩略图墙 / 暗化 / 入场动画） | 未开始 |
-| M5 | 多 Agent 仲裁：`claim/own/close/revoke` + 看板 | 🔶 骨架：窗口租约排他（I1）+ `window_owned_by` + 看板分组，已用双 Agent 抢屏验证 |
+| M5 | 多 Agent 仲裁：`claim/own/close/revoke` + 看板 | 🔶 租约排他（I1）+ `window_owned_by` + `board`，已用双 Agent 抢屏验证；优先级/抢占未完 |
 | M6 | auto × 多 Agent：关闭保护 + `unmanaged_kill` 检测降档 | 未开始 |
 
 > 执行顺序、任务拆分、人日/日历估算与每档 Gate 见 **[docs/plan.md](docs/plan.md)**。
@@ -71,7 +94,9 @@
 desktop-director/
 ├─ prompts/AGENTS.m0.md      # M0 安装版（贴进 AGENTS.md / Trae user_rules）
 ├─ prompts/AGENTS.ddir.md    # M0 详细版（含错误码与理由）
-├─ tools/ddir.ps1|.cmd       # 参考实现（只读 + move/claim/release；无 Rust 工具链时的替代）
+├─ src/                     # Rust 0.1.0（main.rs / win.rs / store.rs）
+├─ dist/                    # 可直接用的发布包（ddir.exe + install.ps1 + 提示词 + zip）
+├─ tools/ddir.ps1|.cmd       # 早期 PowerShell 参考实现（保留作行为对照）
 ├─ tools/dev-env.cmd          # 开发环境（MinGW-w64 + cargo，见 docs/toolchain.md）
 ├─ docs/plan.md             # 开发规划：发布节奏、Gate、任务拆分、估时、风险
 ├─ docs/protocol.md         # 协议草案（两类资源、错误码、不变量、验收用例）

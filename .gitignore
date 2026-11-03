@@ -27,3 +27,7 @@ audit.jsonl
 
 # 安装日志
 .install-*.log
+
+# 发布包要进仓库
+!dist/*.exe
+!dist/*.zip

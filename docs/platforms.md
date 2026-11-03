@@ -1,4 +1,4 @@
-# 多平台支持（Windows / macOS / Linux）
+﻿# 多平台支持（Windows / macOS / Linux）
 
 > 2026-11-03 · 需求变更为"三平台"，本文固定各平台的可做与不可做，避免后面拿 Windows 的经验去承诺做不到的事。
 > 结论先行：**同一套协议 + 每平台一个后端**；Windows 全功能、macOS 基本可用（需授权）、Linux 分 X11 与 Wayland 两档。
@@ -132,7 +132,7 @@
 
 ### 6.1 实践进度（2026-11-03）
 
-- 目标机：`Antonio Liang@192.168.1.88`（用户名带空格，命令行要写成 `"Antonio Liang"@192.168.1.88`）
+- 目标机：`user@192.168.1.x`（用户名带空格，命令行要写成 `"user"@192.168.1.x`）
 - 22 端口已开、ping 通；服务器接受 `publickey,password,keyboard-interactive`
 - 本机已生成密钥 `F:\envs\ssh\id_ddir`（ed25519，无口令），`~/.ssh/config` 里加了 `Host ddir-mac`
 - **待办**：把公钥追加到 Mac 的 `~/.ssh/authorized_keys`（见下），之后统一用 `ssh ddir-mac` 免密登录

@@ -251,6 +251,19 @@ pub fn agent_id() -> String {
     format!("{}-{}", name, cur)
 }
 
+pub fn exe_path(pid: u32) -> String {
+    unsafe {
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if h == 0 { return String::new(); }
+        let mut buf = [0u16; 1024];
+        let mut size = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(h, 0, buf.as_mut_ptr(), &mut size);
+        CloseHandle(h);
+        if ok == 0 { return String::new(); }
+        wide_to_string(&buf[..size as usize])
+    }
+}
+
 pub fn displays() -> Vec<Display> {
     extern "system" fn cb(mon: isize, _hdc: isize, _clip: *mut Rect, data: isize) -> i32 {
         unsafe {

@@ -72,6 +72,7 @@ desktop-director/
 ├─ prompts/AGENTS.m0.md      # M0 安装版（贴进 AGENTS.md / Trae user_rules）
 ├─ prompts/AGENTS.ddir.md    # M0 详细版（含错误码与理由）
 ├─ tools/ddir.ps1|.cmd       # 参考实现（只读 + move/claim/release；无 Rust 工具链时的替代）
+├─ tools/dev-env.cmd          # 开发环境（MinGW-w64 + cargo，见 docs/toolchain.md）
 ├─ docs/plan.md             # 开发规划：发布节奏、Gate、任务拆分、估时、风险
 ├─ docs/protocol.md         # 协议草案（两类资源、错误码、不变量、验收用例）
 ├─ docs/decisions.md        # 已定决策（ADR 简版），避免反复讨论

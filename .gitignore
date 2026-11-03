@@ -1,6 +1,5 @@
-# Rust
+﻿# Rust
 /target/
-Cargo.lock
 
 # Node
 node_modules/
@@ -25,3 +24,6 @@ audit.jsonl
 .idea/
 *.swp
 .install-rust.log
+
+# 安装日志
+.install-*.log

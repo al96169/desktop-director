@@ -40,3 +40,4 @@
 | D25 | **macOS 用 Accessibility API（AX）**，不用 AppleScript/SIP hack | AX 是唯一稳定的窗口摆放途径（yabai/AeroSpace 同路线）；AppleScript 走 System Events 更慢且同样要 TCC | 需要用户授权"辅助功能 + 屏幕录制"；未授权时只读降级 |
 | D26 | **Linux 分档：X11 全支持 / Hyprland-KWin 半支持 / GNOME Wayland 明牌不支持** | Wayland 没有通用窗口控制协议，这是安全模型的必然结果，不是实现偷懒 | caps 如实报告；GNOME 下只做启动与观察，文档写明 |
 | D27 | **每个后端必须通过 ddir selftest 才发布** | 跨平台最大的坑是"以为做到了"；三套系统各有一套边界行为 | selftest 输出逐条 pass/fail，作为发布门槛（见 docs/platforms.md §4） |
+| D28 | **本机工具链用 MSYS2 的 MinGW-w64 + rust 1.99.1**（F:\envs\msys64），不用官方 rustup | rustup 安装包被限速到 30KB/s、GitHub release 直连 0KB/s；TUNA 镜像 4–5MB/s，MSYS2 pacman 是唯一稳的路径 | 	ools\dev-env.cmd 设 PATH/CARGO_HOME；GNU 而非 MSVC ABI，个别 crate 可能需要换工具链（见 docs/toolchain.md） |

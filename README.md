@@ -10,7 +10,7 @@
 | 状态目录 | `~/.ddir/`（`mode.txt` / `leases.tsv` / `apps.tsv` / `audit.tsv`） |
 | 形态 | v0.1 是**单文件 CLI**（每次调用读写 `~/.ddir`）；常驻 daemon + 管道 / MCP 在 M3 之后 |
 | 平台 | **Windows / macOS / Linux 三平台**（协议一份，后端各一份；能力差异见 [docs/platforms.md](docs/platforms.md)） |
-| 设计报告 | `docs/design.md` |
+| 文档 | 规划 [plan](docs/plan.md) · 协议 [protocol](docs/protocol.md) · 平台 [platforms](docs/platforms.md) · 决策 [decisions](docs/decisions.md) |
 
 ---
 

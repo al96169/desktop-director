@@ -1,12 +1,14 @@
 # src/
 
-代码从 **M1** 开始。按 `docs/decisions.md` D11，分两段：
+Rust workspace，从 **M1** 开始（见 `docs/decisions.md` D11 修订与 `docs/plan.md`）。
 
-| 目录 | 内容 | 语言 |
+| crate | 职责 | 依赖 |
 |---|---|---|
-| `proto/` | 协议原型：`claim/own/close/revoke` 状态机 + 假窗口后端（不碰真桌面，可在 CI 跑） | Node 18+，零依赖 |
-| `app/` | 正式版：Win32 执行层 + 托盘 + HUD | Rust（`windows` crate） |
+| `ddir-core` | 纯逻辑：模型/租约/仲裁/策略/布局/回放。**零 Win32**，CI 可跑 | 无平台依赖 |
+| `ddir-win` | Win32 后端：枚举+过滤、几何、DPI、显示器、进程、`WM_CLOSE` | `windows` crate |
+| `ddir-hud` | 装饰层 + DWM 缩略图合成层（R4） | Direct2D/GDI |
+| `ddir-cli` | bin：CLI、命名管道、托盘、配置 | 以上三者 |
 
-`proto/` 的验收标准是 `docs/protocol.md` §8 的 12 条用例全部通过；`app/` 只允许在 `proto/` 冻结后开工。
+**第一条 commit 应该是**：`ddir list --json` —— 枚举 + 过滤 + 输出与 Alt+Tab 同级的窗口列表，纯只读。
 
-（M1 的第一个提交应该是 `ddir list --json`：枚举 + 过滤 + 输出与 Alt+Tab 一致的窗口列表，只读。）
+**开发期铁律**：写操作（`SetWindowPos` / `WM_CLOSE`）只在 `feature = "write"` 下编译；默认二进制里没有它们（D13）。

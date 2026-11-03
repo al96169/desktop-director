@@ -15,8 +15,10 @@
 | D8 | **semi 默认托管"除主屏外全部"** | 用户已确认；比"首次全手动勾选"少一步操作 | `mode_defaults.semi = "all_except_primary"` |
 | D9 | **Agent 绕过 CLI 直接杀进程：审计 + 自动降档** | 同权限下技术上拦不住，只能"抓现行 + 刹权限" | `unmanaged_kill` → 降为 semi + 通知 |
 | D10 | **不做虚拟桌面切换 / P2P 协商 / 强杀 / 全局钩子注入** | 收益低、风险高、见 README 非目标 | 相关需求一律拒绝并指向替代方案 |
-| D11 | **技术栈：M1–M5 用 Node 原型验证协议，M6 前用 Rust + windows crate 重写正式版** | 先验证协议与观感（同 agentgroup 风格），再换单 exe 常驻托盘 | `src/` 分 `proto/`（Node）与 `app/`（Rust），协议文档为契约 |
+| D11 | **技术栈：Rust + `windows` crate，从 M1 开始**（~~原计划 Node 原型→Rust 重写~~，2026-11-03 修订） | M1 第一行就要 `EnumWindows`，Node 只能靠 native 模块/子进程桥接，验证不到"真窗口行为"这个真难点；协议冻结靠文档 + 回放夹具，不靠语言；避免二次实现 | 单一 workspace（`ddir-core` / `ddir-win` / `ddir-hud` / `ddir-cli`）；Node 只保留可选 MCP shim/看板客户端 |
 | D12 | **不耦合任何 Harness**：CLI + 管道 + MCP + 本地 HTTP，Harness 侧只放提示词 | 用户明确要求；不同 Harness 接入能力不同 | 协议层必须与模型无关 |
+| D13 | **写操作默认 dry-run，编译期用 feature gate 禁止** | 开发期最怕"调试时把用户桌面搞乱"，靠自觉不可靠 | `exec` 只在 `feature = "write"` 下编译进二进制；M2 前默认二进制里没有 `SetWindowPos` |
+| D14 | **协议在 R1 结束冻结 v1.0** | Agent 提示词里写死了错误码处理，改语义会静默破坏所有接入方 | 之后 op 只增、错误码只增；不兼容变更升主版本并在 daemon 返回 `proto` 字段 |
 
 ## 待观察（还没定，先记着）
 

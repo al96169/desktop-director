@@ -62,14 +62,18 @@
 | M5 | 多 Agent 仲裁：`claim/own/close/revoke` + 看板 | |
 | M6 | auto × 多 Agent：关闭保护 + `unmanaged_kill` 检测降档 | |
 
+> 执行顺序、任务拆分、人日/日历估算与每档 Gate 见 **[docs/plan.md](docs/plan.md)**。
+> 建议顺序 `M1 → M2 → M3(最小托盘) → M2.2 → M2.5 → M5 → M6`；R1 到手即"日常可用的半自动"。
+
 ## 目录
 
 ```
 desktop-director/
 ├─ prompts/AGENTS.ddir.md   # M0：贴进全局或项目 AGENTS.md 的提示词包
+├─ docs/plan.md             # 开发规划：发布节奏、Gate、任务拆分、估时、风险
 ├─ docs/protocol.md         # 协议草案（两类资源、错误码、不变量、验收用例）
 ├─ docs/decisions.md        # 已定决策（ADR 简版），避免反复讨论
-└─ src/                     # 代码（M1 起：先 Node 原型验证协议，再 Rust 重写）
+└─ src/                     # 代码（M1 起 Rust workspace：core/win/hud/cli）
 ```
 
 ## 快速开始（M0）

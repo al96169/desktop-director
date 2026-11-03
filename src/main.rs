@@ -617,6 +617,180 @@ fn cmd_autostart(args: &[String]) -> i32 {
     0
 }
 
+// ---------- auto mode (M2.5): arm -> close -> undo ----------
+
+fn armed_path() -> std::path::PathBuf { store::home().join("armed.txt") }
+fn closed_path() -> std::path::PathBuf { store::home().join("closed.tsv") }
+
+pub fn is_armed() -> bool {
+    match std::fs::read_to_string(armed_path()) {
+        Ok(s) => s.trim().parse::<u64>().map(|ts| store::now_unix().saturating_sub(ts) < 3600).unwrap_or(false),
+        Err(_) => false,
+    }
+}
+
+fn arm() {
+    let _ = std::fs::write(armed_path(), store::now_unix().to_string());
+}
+
+fn foreground_app() -> String {
+    win::list_windows().into_iter().find(|w| w.foreground).map(|w| w.app).unwrap_or_default()
+}
+
+fn agents_own(app: &str) -> bool {
+    let now = store::now_unix();
+    store::apps().iter().any(|a| a.app.eq_ignore_ascii_case(app) && a.since + a.ttl > now)
+}
+
+struct Candidate { app: String, windows: usize, hexes: Vec<String>, pids: Vec<u32> }
+
+fn candidates(only: Option<&str>) -> Vec<Candidate> {
+    let fg = foreground_app();
+    let mut out: Vec<Candidate> = Vec::new();
+    for w in win::list_windows() {
+        if w.minimized { continue; }
+        if let Some(name) = only {
+            if !w.app.eq_ignore_ascii_case(name) && !w.title.to_lowercase().contains(&name.to_lowercase()) { continue; }
+        } else {
+            if w.app.eq_ignore_ascii_case(&fg) || agents_own(&w.app) || w.app == "explorer" || w.app == "ddir" { continue; }
+        }
+        match out.iter_mut().find(|c| c.app == w.app) {
+            Some(c) => { c.windows += 1; c.hexes.push(w.hex.clone()); if !c.pids.contains(&w.pid) { c.pids.push(w.pid); } }
+            None => out.push(Candidate { app: w.app.clone(), windows: 1, hexes: vec![w.hex.clone()], pids: vec![w.pid] }),
+        }
+    }
+    out
+}
+
+fn cmd_auto(args: &[String]) -> i32 {
+    let sub = args.first().cloned().unwrap_or_else(|| "status".into());
+    match sub.as_str() {
+        "status" => {
+            println!(
+                "{{\"ok\":true,\"mode\":\"{}\",\"armed\":{},\"closed\":{}}}",
+                store::mode(), is_armed(),
+                std::fs::read_to_string(closed_path()).map(|s| s.lines().count()).unwrap_or(0)
+            );
+        }
+        "plan" => {
+            let cs = candidates(arg(args, "--app").as_deref());
+            let rows: Vec<String> = cs.iter()
+                .map(|c| format!("{{\"app\":\"{}\",\"windows\":{},\"pids\":{}}}", esc(&c.app), c.windows, c.pids.len()))
+                .collect();
+            println!(
+                "{{\"ok\":true,\"mode\":\"{}\",\"armed\":{},\"candidates\":[{}]}}",
+                store::mode(), is_armed(), rows.join(",")
+            );
+        }
+        "on" => {
+            let secs: u64 = arg(args, "--seconds").and_then(|s| s.parse().ok()).unwrap_or(30);
+            let cs = candidates(None);
+            let names: Vec<String> = cs.iter().map(|c| format!("{}({}窗口)", c.app, c.windows)).collect();
+            println!("== 将接管（不关闭只是候选）");
+            println!("   {}", if names.is_empty() { "（没有候选）".to_string() } else { names.join("、") });
+            println!("== 保护");
+            println!("   被 Agent 认领的软件 / 前台软件 / explorer / ddir 自身");
+            println!("== 倒计时 {} 秒，Ctrl+C 取消", secs);
+            for i in (1..=secs).rev() {
+                print!("\r  {} 秒 ", i);
+                use std::io::Write;
+                let _ = std::io::stdout().flush();
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+            arm();
+            store::audit("auto_arm", &format!("seconds={} candidates={}", secs, cs.len()));
+            println!("\n已武装（1 小时内有效）：现在可以 ddir auto close 了");
+            println!("{{\"ok\":true,\"armed\":true,\"candidates\":{}}}", cs.len());
+        }
+        "close" => {
+            if store::mode() != "auto" {
+                println!("{{\"ok\":false,\"error\":\"mode_not_auto\",\"hint\":\"先 ddir mode auto\"}}");
+                return 0;
+            }
+            if !is_armed() {
+                println!("{{\"ok\":false,\"error\":\"needs_user_consent\",\"hint\":\"先 ddir auto on 武装（倒计时确认）\"}}");
+                return 0;
+            }
+            let explicit = arg(args, "--app");
+            if explicit.is_none() && !has_flag(args, "--force") {
+                println!("{{\"ok\":false,\"error\":\"needs_explicit_target\",\"hint\":\"自动挑目标很容易关错东西：用 --app <名字> 指定，或加 --force 让它自己挑（最多 3 个）\"}}");
+                return 0;
+            }
+            let limit: usize = arg(args, "--max").and_then(|s| s.parse().ok()).unwrap_or(3);
+            let cs = candidates(explicit.as_deref());
+            let mut closed = 0;
+            let mut blocked = 0;
+            for c in cs.iter().take(limit) {
+                // remember how to bring it back before touching anything
+                let path = win::exe_path(c.pids[0]);
+                let first = win::list_windows().into_iter().find(|w| w.app == c.app);
+                let rect = first.as_ref().map(|w| w.win).unwrap_or([0, 0, 0, 0]);
+                for hex in &c.hexes {
+                    if let Some(h) = win::parse_hwnd(hex) {
+                        win::close_graceful(h);
+                    }
+                }
+                let mut gone = false;
+                for _ in 0..30 {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    if win::list_windows().iter().all(|w| w.app != c.app) {
+                        gone = true;
+                        break;
+                    }
+                }
+                if gone {
+                    let line = format!(
+                        "{}\t{}\t{},{},{},{}\t{}\n",
+                        c.app, path, rect[0], rect[1], rect[2], rect[3], store::now_unix()
+                    );
+                    use std::io::Write;
+                    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(closed_path()) {
+                        let _ = f.write_all(line.as_bytes());
+                    }
+                    store::audit("auto_close", &c.app);
+                    println!("已关闭：{}{}", c.app, if path.is_empty() { "（无路径，撤销时只能提示）" } else { "" });
+                    closed += 1;
+                } else {
+                    store::audit("auto_close_blocked", &c.app);
+                    println!("close_blocked：{}（有未保存内容或模态框，已跳过，不重试）", c.app);
+                    blocked += 1;
+                }
+            }
+            println!("{{\"ok\":true,\"closed\":{},\"blocked\":{}}}", closed, blocked);
+        }
+        "undo" => {
+            let txt = std::fs::read_to_string(closed_path()).unwrap_or_default();
+            let mut n = 0;
+            for line in txt.lines() {
+                let f: Vec<&str> = line.split('\t').collect();
+                if f.len() < 3 || f[1].is_empty() {
+                    continue;
+                }
+                if std::process::Command::new(f[1]).spawn().is_ok() {
+                    n += 1;
+                    let app = f[0].to_string();
+                    let rect: Vec<i32> = f[2].split(',').filter_map(|s| s.parse().ok()).collect();
+                    std::thread::spawn(move || {
+                        for _ in 0..40 {
+                            std::thread::sleep(std::time::Duration::from_millis(250));
+                            if let Some(w) = win::list_windows().into_iter().find(|w| w.app == app) {
+                                if rect.len() == 4 && rect[2] > 0 {
+                                    win::set_rect(w.hwnd, [rect[0], rect[1], rect[2], rect[3]]);
+                                }
+                                break;
+                            }
+                        }
+                    });
+                }
+            }
+            let _ = std::fs::remove_file(closed_path());
+            store::audit("auto_undo", &format!("relaunched={}", n));
+            println!("{{\"ok\":true,\"relaunched\":{}}}", n);
+        }
+        _ => println!("{{\"ok\":false,\"error\":\"unknown_auto_subcmd\"}}"),
+    }
+    0
+}
 fn cmd_board() -> i32 {
     let me = win::agent_id();
     let now = store::now_unix();
@@ -709,6 +883,7 @@ fn main() {
         "selftest" => cmd_selftest(),
         "tray" => tray::run(),
         "autostart" => cmd_autostart(rest),
+        "auto" => cmd_auto(rest),
         "version" | "--version" | "-V" => {
             println!("ddir {} (windows)", VERSION);
             0

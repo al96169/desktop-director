@@ -40,6 +40,12 @@ ddir disown --app "Code"   # 干完还回去
 - 关闭软件**只能**通过 `ddir close --window <hwnd>`：只能关自己 `own` 过的（否则 `not_owned`），只发 `WM_CLOSE`、等 3 秒；返回 `close_blocked` 说明有未保存内容，**不要重试**。
 - **永远不要** `taskkill` / `Stop-Process` / `kill`（绕过会被记 `unmanaged_kill` 并降档）。
 
+## auto 档额外规矩
+
+- 关闭软件前必须先让用户武装：`ddir auto on`（30 秒倒计时，可取消）。未武装时 `close` 返回 `needs_user_consent`。
+- 自动挑目标很危险：`ddir auto close` 不带 `--app` 会被拒（`needs_explicit_target`），优先用 `ddir close --window` 或 `ddir auto close --app <名字>`。
+- 关错了可以用 `ddir auto undo` 把刚才关掉的软件重新拉起来（位置也会还原）。
+
 ## 严禁
 
 - 直接杀进程、切虚拟桌面、进独占全屏

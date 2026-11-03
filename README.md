@@ -30,6 +30,9 @@ ddir list --text       # 过滤到 Alt-Tab 级的窗口列表
 ddir selftest          # 平台能力自检（7 项）
 ddir tray              # 托盘常驻（右键：模式 / 全部还原 / 窗口列表 / 开机自启）
 ddir autostart on      # 开机自启（注册到 HKCU Run）
+ddir auto on --seconds 30   # auto 武装（倒计时，可 Ctrl+C 取消）
+ddir auto close --app 记事本 # 只关指定目标；不带 --app 会被拒绝
+ddir auto undo             # 把刚关掉的拉回来
 
 # 3) 给 Agent 装上规矩（可选）
 powershell -ExecutionPolicy Bypass -File dist\install.ps1 -WithPrompt
@@ -81,7 +84,7 @@ target\release\ddir.exe selftest
 | M1 | 只读：枚举/过滤/显示器/`ddir plan --dry-run` | ✅ **Rust 0.1.0**（338KB 单 exe）：`list/displays/status/plan/selftest` |
 | M2 | semi 可写：窗口租约 + 用户所有权 + 撤销 | ✅ `claim/move/hide/show/close/release/own`，`release` 像素级还原，`user_active` 冷却 |
 | M2.2 | 屏幕托管：`display_uid` + 托盘勾选 + 借用/热插拔 | 未开始（当前单屏 + 静态托管策略） |
-| M2.5 | auto 处决：武装倒计时 + `WM_CLOSE` 管道 + `undo-close` | 未开始 |
+| M2.5 | auto 处决：武装倒计时 + `WM_CLOSE` 管道 + `undo-close` | ✅ 骨架：`ddir auto on/plan/close/undo`，30s 倒计时、只发 `WM_CLOSE`、记录重启路径与位置、`undo` 拉回 |
 | M3 | 托盘三档 | ✅ **Rust 原生托盘**（`ddir tray`）：三档切换 / 全部还原 / 窗口列表 / 开机自启 / 单实例，7.8MB 内存 |
 | M4 | HUD 装饰层（缩略图墙 / 暗化 / 入场动画） | 未开始 |
 | M5 | 多 Agent 仲裁：`claim/own/close/revoke` + 看板 | 🔶 租约排他（I1）+ `window_owned_by` + `board`，已用双 Agent 抢屏验证；优先级/抢占未完 |

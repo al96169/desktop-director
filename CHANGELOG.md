@@ -1,5 +1,17 @@
 ﻿# Changelog
 
+## 0.3.0 - 2026-11-04
+
+### auto 武装 / 处决 / 撤销（M2.5 骨架）
+
+- `ddir auto plan`：列出候选（排除前台、被 Agent 认领的、explorer、ddir 自身）
+- `ddir auto on --seconds N`：N 秒倒计时后武装（1 小时有效），Ctrl+C 取消
+- `ddir auto close --app <名字>`：只对指定目标发 `WM_CLOSE`、等 3 秒；没关掉记 `close_blocked` 不重试
+  - 不带 `--app` 默认拒绝（`needs_explicit_target`），必须加 `--force` 才允许自动挑（最多 3 个）
+- 关闭前记录 exe 路径 + 窗口位置到 `~/.ddir/closed.tsv`
+- `ddir auto undo`：重新拉起刚关掉的软件并把窗口摆回原位置
+- 未武装时 `auto close` 返回 `needs_user_consent`
+
 ## 0.2.0 - 2026-11-04
 
 ### Rust 原生托盘（M3）

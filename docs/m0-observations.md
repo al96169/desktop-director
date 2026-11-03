@@ -44,11 +44,11 @@ Trae CN 的会话无法脚本驱动，规则装进 `~/.trae-cn/user_rules/` 后�
 1. `user_idle_s` 恒为 0 → 无法用状态自证"5 秒内不动窗口"。
 2. 不支持 `ddir close` → 记事本留在打开状态。
 
-**⚠️ 后续追问推翻了"规则已生效"这个判断**：问它"系统规则里第 8/9 条讲什么"时，它答的是 Trae 自带的代码引用/图片规范与行为守则，**完全没有 Desktop Director 段落**。
+**⚠️ 中间一次追问与最终结论**：首次追问"系统规则里第 8/9 条讲什么"时，它答的全是 Trae 自带的代码引用/图片规范，没有 Desktop Director 段落 → 当时**规则尚未加载**（Trae 进程启动早于规则写入）。**重启 Trae 后新会话再问，它逐字复述了 v1.2 的 hide / close 两条与 `unmanaged_kill` 禁令**，一位不差 → 规则加载确认。
 
-→ 说明 `~/.trae-cn/user_rules/rule-*.md` 这份规则**没有进入 Trae 的 system prompt**。T3 实际验证的是"按任务提示逐步执行"（prompt 驱动），**不是"规则安装生效"**。
+→ 结论：`~/.trae-cn/user_rules/rule-*.md` **需要重启 Trae 才加载**；验收方式是"复述规则内容"，不能只看行为。另：它拒绝在"不执行命令"的前提下编造 `ddir status` 输出，属于规则遵守的正向证据。
 
-**待确认**：Trae 的 user_rules 是否需要重启才加载（当前进程早于规则写入），还是必须通过 Trae 设置界面添加。兜底方案：仓库根已加 `AGENTS.md`（Trae 的 bundle 里有 `chat.useAgentsMdFile` / `AGENTS.md` 指令文件机制），打开本仓库时作为项目级规则生效。
+兜底仍然保留：仓库根 `AGENTS.md`（Trae bundle 有 `chat.useAgentsMdFile` / 指令文件机制），打开本仓库时作为项目级规则。此前 T3 第一次"通过"实际只是任务提示写死了步骤，**是 prompt 驱动、不是规则生效**——这条已写进 D21。
 
 ## T4：隐藏场景（DSH headless，补 Gate G0 的缺口）
 
@@ -78,7 +78,7 @@ Trae CN 的会话无法脚本驱动，规则装进 `~/.trae-cn/user_rules/` 后�
 | 能复现"该藏的藏了" | ✅ T4：`hidden_by_you=2` |
 | 不碰用户窗口 | ✅ T1 主动避让、T3 其它窗口零变化 |
 | 不越权关闭 | ✅ 只关自己 own 过的；未出现 kill |
-| 跨 Harness | ⚠️ DSH 已验证（规则确实进入 system prompt）；Trae 的**行为**通过，但**规则加载未验证**（T3 实为 prompt 驱动），已加仓库 `AGENTS.md` 兜底 |
+| 跨 Harness | ✅ DSH（规则进入 system prompt）＋ Trae CN（**需重启**，重启后逐字复述规则确认）；两边的行为测试均通过 |
 
 **结论**：**G0 通过**。M0 提示词可以长期留在两台 Harness 的全局指令里。
 

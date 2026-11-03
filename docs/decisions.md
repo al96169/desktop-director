@@ -25,7 +25,7 @@
 | D18 | **Agent 身份 = 父进程链上的宿主进程**（Trae / 终端 / 执行器），不是本次调用的 PID | 实测 `own` 之后立刻 `hide` 会因 PID 变化报 `owned_by_other`，身份不稳定会废掉所有跨调用语义 | `DDIR_AGENT` 可覆盖；宿主进程退出即身份失效（符合直觉） |
 | D19 | **用户活跃信号 = 光标位移 >25px 或前台窗口变化**，`input_age_s` 只作原始值照实报告 | 本机有鼠标抖动/注入（Bloody6 类常驻工具），`GetLastInputInfo` 长期为 0，单用它会让"空闲判断"永远失真 | 判定结果写进 `user_active`；`claim/move` 遇 `user_active` 可 `--force`；后续可加键盘专用信号 |
 | D20 | **`hide`/`close` 都要求先 `own`**；`close` 只发 `WM_CLOSE` 等 3s，失败即 `close_blocked`，不重试不强杀 | 关闭是唯一会丢数据的动作，必须挂在"负责人"语义上；也顺手把 M2.5 的闸门做进参考实现 | `not_owned` / `owned_by_other` 直接拒绝；`release` 同时还原隐藏与位置 |
-| D21 | **Trae 的用户规则不可假定生效**：`~/.trae-cn/user_rules/*.md` 实测未进入 system prompt；仓库根 `AGENTS.md` 作为项目级兜底 | 追问"规则第 8/9 条"时 Trae 答的全是自带规范，证明规则没加载；而 Trae bundle 里有 `AGENTS.md` / `.instructions.md` 机制 | 跨 Harness 验收必须要求对方**复述规则内容**，不能只看行为（行为可能来自任务提示） |
+| D21 | **Trae 用户规则需重启才加载**（实测：重启前未进 system prompt，重启后逐字复述成功）；仓库根 `AGENTS.md` 保留为项目级兜底 | 只改文件不重启会静默不生效，最容易误判"已验证" | 跨 Harness 验收一律要求对方**复述规则原文**，不看行为（行为可能来自任务提示）；Trae 侧改动后必须重启 |
 
 ## 待观察（还没定，先记着）
 

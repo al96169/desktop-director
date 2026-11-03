@@ -1,4 +1,4 @@
-# 已定决策（ADR 简版）
+﻿# 已定决策（ADR 简版）
 
 > 目的：把"已经讨论过、别再反复"的结论固定下来。改一条要写理由和日期。
 > 完整论证见 `研究分析报告.md`（vault）。
@@ -41,3 +41,4 @@
 | D26 | **Linux 分档：X11 全支持 / Hyprland-KWin 半支持 / GNOME Wayland 明牌不支持** | Wayland 没有通用窗口控制协议，这是安全模型的必然结果，不是实现偷懒 | caps 如实报告；GNOME 下只做启动与观察，文档写明 |
 | D27 | **每个后端必须通过 ddir selftest 才发布** | 跨平台最大的坑是"以为做到了"；三套系统各有一套边界行为 | selftest 输出逐条 pass/fail，作为发布门槛（见 docs/platforms.md §4） |
 | D28 | **本机工具链用 MSYS2 的 MinGW-w64 + rust 1.99.1**（F:\envs\msys64），不用官方 rustup | rustup 安装包被限速到 30KB/s、GitHub release 直连 0KB/s；TUNA 镜像 4–5MB/s，MSYS2 pacman 是唯一稳的路径 | 	ools\dev-env.cmd 设 PATH/CARGO_HOME；GNU 而非 MSVC ABI，个别 crate 可能需要换工具链（见 docs/toolchain.md） |
+| D30 | **并排优先，禁止叠放**：claim 重排「本 Agent 已占窗口 + 本次新增」，等宽列布局（1 列满宽 / 2 列各半 / 3 列各 1/3，间隔 16px） | 用户实测反馈：新窗口摆上去把旧窗口压到底部、内容被遮住；"只摆新窗口"的语义是错的 | 每次 claim 都重排；elease 仍还原到**最初**的 from；超过 3 个窗口返回 quota_exceeded |

@@ -1,4 +1,4 @@
-//! ddir - Desktop Director (Windows backend, v0.1)
+﻿//! ddir - Desktop Director (Windows backend, v0.1)
 //! Lease-based window / software orchestration for AI agents.
 
 mod store;
@@ -104,23 +104,17 @@ fn displays_json(ds: &[Display]) -> String {
 
 // ---------- layout ----------
 
+/// Equal-width columns so windows sit **side by side** instead of stacking on top of each other.
 fn layout_for(count: usize, work: [i32; 4]) -> Vec<[i32; 4]> {
     let (wx, wy, ww, wh) = (work[0], work[1], work[2], work[3]);
-    let mut out = Vec::new();
-    if count <= 1 {
-        out.push([wx + GAP, wy + GAP, ww - 2 * GAP, wh - 2 * GAP]);
-        return out;
+    let n = count.max(1) as i32;
+    if n == 1 {
+        return vec![[wx + GAP, wy + GAP, ww - 2 * GAP, wh - 2 * GAP]];
     }
-    let left_w = ((ww - 3 * GAP) as f32 * 0.66) as i32;
-    out.push([wx + GAP, wy + GAP, left_w, wh - 2 * GAP]);
-    let remain = count - 1;
-    let right_total = ww - 3 * GAP - left_w;
-    let slot = right_total / remain as i32;
-    for i in 0..remain {
-        let x = wx + 2 * GAP + left_w + i as i32 * slot;
-        out.push([x, wy + GAP, slot - GAP, wh - 2 * GAP]);
-    }
-    out
+    let col = (ww - (n + 1) * GAP) / n;
+    (0..n)
+        .map(|i| [wx + GAP + i * (col + GAP), wy + GAP, col, wh - 2 * GAP])
+        .collect()
 }
 
 struct Need {
@@ -266,6 +260,11 @@ fn cmd_status() -> i32 {
     0
 }
 
+fn quota_exceeded() -> i32 {
+    println!("{{\"ok\":false,\"error\":\"quota_exceeded\",\"hint\":\"单 Agent 最多 3 个窗口；先 release 不用的\"}}");
+    0
+}
+
 fn cmd_claim(args: &[String], dry: bool) -> i32 {
     let mode = store::mode();
     if mode == "off" {
@@ -286,8 +285,8 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
     let spec = arg(args, "--needs").or_else(|| positional(args).first().cloned()).unwrap_or_default();
     let needs = parse_needs(&spec);
     let now = store::now_unix();
-    let live: Vec<_> = store::leases().into_iter().filter(|l| l.expires > now).collect();
-    let busy: Vec<_> = live.iter().filter(|l| l.agent != me).cloned().collect();
+    let live: Vec<store::Lease> = store::leases().into_iter().filter(|l| l.expires > now).collect();
+    let busy: Vec<store::Lease> = live.iter().filter(|l| l.agent != me).cloned().collect();
 
     let managed_ids: Vec<String> = managed.iter().map(|d| d.uid.clone()).collect();
     let wins: Vec<WinInfo> = win::list_windows()
@@ -295,13 +294,21 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
         .filter(|w| managed_ids.contains(&w.display))
         .collect();
 
-    let cells = layout_for(needs.len(), managed[0].work);
-    let mut assign: Vec<(WinInfo, [i32; 4])> = Vec::new();
+    // Start from what this agent already holds, then add whatever the new request needs.
+    // Everything gets laid out again, so opening a new window never buries the old ones.
+    let mut targets: Vec<(WinInfo, Option<store::Lease>)> = Vec::new();
+    for l in live.iter().filter(|l| l.agent == me) {
+        if let Some(w) = wins.iter().find(|w| w.hex.eq_ignore_ascii_case(&l.window)) {
+            if !w.minimized {
+                targets.push((w.clone(), Some(l.clone())));
+            }
+        }
+    }
     let mut blocked: Option<store::Lease> = None;
-    for (i, need) in needs.iter().enumerate() {
+    for need in needs.iter() {
         let mut chosen: Option<&WinInfo> = None;
         for w in &wins {
-            if assign.iter().any(|(a, _)| a.hwnd == w.hwnd) || w.minimized || !matches(w, &need.name) {
+            if targets.iter().any(|(t, _)| t.hwnd == w.hwnd) || w.minimized || !matches(w, &need.name) {
                 continue;
             }
             if let Some(b) = busy.iter().find(|b| b.window == w.hex) {
@@ -312,72 +319,93 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
             break;
         }
         if let Some(w) = chosen {
-            let cell = cells[i.min(cells.len() - 1)];
-            assign.push((w.clone(), cell));
+            targets.push((w.clone(), None));
         }
     }
-    if assign.is_empty() {
+    if targets.len() > 3 {
+        return quota_exceeded();
+    }
+    if targets.is_empty() {
         if let Some(b) = blocked {
             let left = b.expires.saturating_sub(now);
             println!(
                 "{{\"ok\":false,\"error\":\"window_owned_by\",\"window\":\"{}\",\"owner_agent\":\"{}\",\"expires_in_s\":{},\"hint\":\"该窗口正被另一个 Agent 使用；换窗口，或等它 release\"}}",
-                esc(&b.window),
-                esc(&b.agent),
-                left
+                esc(&b.window), esc(&b.agent), left
             );
         } else {
             println!("{{\"ok\":false,\"error\":\"no_window\",\"hint\":\"没有匹配到托管屏上的窗口；先打开目标软件\"}}");
         }
         return 0;
     }
+
+    let cells = layout_for(targets.len(), managed[0].work);
+    let plan: Vec<(WinInfo, [i32; 4], Option<store::Lease>, [i32; 4])> = targets
+        .iter()
+        .enumerate()
+        .map(|(i, (w, l))| {
+            let from = l.as_ref().map(|x| x.from).unwrap_or(w.win);
+            (w.clone(), cells[i], l.clone(), from)
+        })
+        .collect();
+
+    let assign_json: Vec<String> = plan
+        .iter()
+        .map(|(w, r, l, f)| {
+            format!(
+                "{{\"window\":\"{}\",\"app\":\"{}\",\"title\":\"{}\",\"display\":\"{}\",\"from\":{},\"rect\":{},\"retiled\":{}}}",
+                w.hex, esc(&w.app), esc(&w.title), esc(&w.display), rect_json(f), rect_json(r), l.is_some()
+            )
+        })
+        .collect();
+    let managed_uid_json = managed_ids.iter().map(|s| format!("\"{}\"", esc(s))).collect::<Vec<_>>().join(",");
+
     if dry {
-        let a: Vec<String> = assign
-            .iter()
-            .map(|(w, r)| {
-                format!(
-                    "{{\"window\":\"{}\",\"app\":\"{}\",\"title\":\"{}\",\"display\":\"{}\",\"from\":{},\"rect\":{}}}",
-                    w.hex, esc(&w.app), esc(&w.title), esc(&w.display), rect_json(&w.win), rect_json(r)
-                )
-            })
-            .collect();
-        println!("{{\"ok\":true,\"dry_run\":true,\"mode\":\"{}\",\"assign\":[{}]}}", esc(&mode), a.join(","));
+        println!(
+            "{{\"ok\":true,\"dry_run\":true,\"mode\":\"{}\",\"displays_managed\":[{}],\"assign\":[{}],\"focus\":\"none\"}}",
+            esc(&mode), managed_uid_json, assign_json.join(",")
+        );
         return 0;
     }
-    let lease = format!("ls_{:06x}", (now as u32) ^ (std::process::id()));
-    let mut new_leases = Vec::new();
-    let mut applied = Vec::new();
-    for (w, r) in &assign {
-        win::set_rect(w.hwnd, *r);
-        new_leases.push(store::Lease {
-            window: w.hex.clone(),
-            agent: me.clone(),
-            action: "move".into(),
-            from: w.win,
-            to: *r,
-            expires: now + LEASE_TTL,
-            lease: lease.clone(),
-        });
-        applied.push(format!(
-            "{{\"window\":\"{}\",\"app\":\"{}\",\"title\":\"{}\",\"display\":\"{}\",\"from\":{},\"rect\":{}}}",
-            w.hex, esc(&w.app), esc(&w.title), esc(&w.display), rect_json(&w.win), rect_json(r)
-        ));
+
+    let lease_id = format!("ls_{:06x}", (now as u32) ^ std::process::id());
+    let mut all: Vec<store::Lease> = Vec::new();
+    for l in live.iter() {
+        if l.agent == me {
+            if let Some((_, r, _, _)) = plan.iter().find(|(w, _, _, _)| w.hex.eq_ignore_ascii_case(&l.window)) {
+                // refresh the lease, keep its original `from` so release still restores the user's layout
+                all.push(store::Lease { to: *r, expires: now + LEASE_TTL, ..l.clone() });
+                continue;
+            }
+            // window is gone: drop the stale lease
+            if wins.iter().all(|w| !w.hex.eq_ignore_ascii_case(&l.window)) {
+                continue;
+            }
+        }
+        all.push(l.clone());
     }
-    let mut all = live.clone();
-    all.extend(new_leases);
+    for (w, r, l, f) in &plan {
+        win::set_rect(w.hwnd, *r);
+        if l.is_none() {
+            all.push(store::Lease {
+                window: w.hex.clone(),
+                agent: me.clone(),
+                action: "move".into(),
+                from: *f,
+                to: *r,
+                expires: now + LEASE_TTL,
+                lease: lease_id.clone(),
+            });
+        }
+    }
     store::save_leases(&all);
-    store::audit("claim", &format!("lease={} n={}", lease, applied.len()));
-    let managed_ids: Vec<String> = managed.iter().map(|d| d.uid.clone()).collect();
+    let retiled = plan.iter().filter(|(_, _, l, _)| l.is_some()).count();
+    store::audit("claim", &format!("lease={} windows={} retiled={}", lease_id, plan.len(), retiled));
     println!(
-        "{{\"ok\":true,\"lease\":\"{}\",\"mode\":\"{}\",\"displays_managed\":[{}],\"assign\":[{}],\"focus\":\"none\",\"ttl_s\":{}}}",
-        lease,
-        esc(&mode),
-        managed_ids.iter().map(|s| format!("\"{}\"", esc(s))).collect::<Vec<_>>().join(","),
-        applied.join(","),
-        LEASE_TTL
+        "{{\"ok\":true,\"lease\":\"{}\",\"mode\":\"{}\",\"displays_managed\":[{}],\"assign\":[{}],\"retiled\":{},\"focus\":\"none\",\"ttl_s\":{}}}",
+        lease_id, esc(&mode), managed_uid_json, assign_json.join(","), retiled, LEASE_TTL
     );
     0
 }
-
 fn cmd_move(args: &[String]) -> i32 {
     let hwnd = match arg(args, "--window").and_then(|s| win::parse_hwnd(&s)) {
         Some(h) => h,

@@ -1,4 +1,4 @@
-# AGENTS.ddir — Desktop Director 提示词包（M0）
+﻿# AGENTS.ddir — Desktop Director 提示词包（M0）
 
 > 用法：把下面 `---` 之间的内容整段贴进全局指令（`~/.dsh/AGENTS.md`、`CLAUDE.md`、`AGENTS.md` 等）。
 > 设计原则：**写死禁止项 > 写细应该做**；每条规则都要能用一条命令验证。

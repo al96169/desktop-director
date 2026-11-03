@@ -1,4 +1,4 @@
-# 协议草案 v0.1
+﻿# 协议草案 v0.1
 
 > 状态：草案（M1 前冻结第一版）。任何 Agent / Harness 只要会说这几条命令，就能接入。
 > 关键现实：**Agent 的上下文推不进通知**，所以状态必须挂在每次调用的返回值里。
@@ -69,6 +69,7 @@ focus    (holder: agent_id, until)                   —— 全局唯一
   "focus": "none", "notes": ["DISPLAY1 归用户，不可摆"] }
 ```
 
+- `claim` **总是重排**：把本 Agent 已持有的窗口和本次新增窗口一起做等宽并排（side-by-side），不会叠放；`retiled: true` 表示该窗口是被重排的旧窗口。
 - `wait_s ≤ 3`，默认 0（**立即返回**）。禁止"持有租约时轮询等待别人"——死锁唯一来源。
 - 单次 `needs` 最多 3 项；单 Agent 同时最多 3 个窗口 lease。
 - `release`：`{ "op":"release", "lease":"ls_9c1", "restore": true }`，`restore` 默认 true（回到快照）。

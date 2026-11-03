@@ -34,7 +34,7 @@
 
 → 说明提示词没有造成"为了用而用"的过度管理。
 
-## T3：跨 Harness（Trae CN，人工触发）
+## T3：跨 Harness（Trae CN，人工触发）—— ⚠️ 结论已修正
 
 Trae CN 的会话无法脚本驱动，规则装进 `~/.trae-cn/user_rules/` 后由人工开新会话执行同一套步骤。
 
@@ -43,6 +43,12 @@ Trae CN 的会话无法脚本驱动，规则装进 `~/.trae-cn/user_rules/` 后�
 **Trae 指出的两个问题（都真实、已修）**：
 1. `user_idle_s` 恒为 0 → 无法用状态自证"5 秒内不动窗口"。
 2. 不支持 `ddir close` → 记事本留在打开状态。
+
+**⚠️ 后续追问推翻了"规则已生效"这个判断**：问它"系统规则里第 8/9 条讲什么"时，它答的是 Trae 自带的代码引用/图片规范与行为守则，**完全没有 Desktop Director 段落**。
+
+→ 说明 `~/.trae-cn/user_rules/rule-*.md` 这份规则**没有进入 Trae 的 system prompt**。T3 实际验证的是"按任务提示逐步执行"（prompt 驱动），**不是"规则安装生效"**。
+
+**待确认**：Trae 的 user_rules 是否需要重启才加载（当前进程早于规则写入），还是必须通过 Trae 设置界面添加。兜底方案：仓库根已加 `AGENTS.md`（Trae 的 bundle 里有 `chat.useAgentsMdFile` / `AGENTS.md` 指令文件机制），打开本仓库时作为项目级规则生效。
 
 ## T4：隐藏场景（DSH headless，补 Gate G0 的缺口）
 
@@ -72,7 +78,7 @@ Trae CN 的会话无法脚本驱动，规则装进 `~/.trae-cn/user_rules/` 后�
 | 能复现"该藏的藏了" | ✅ T4：`hidden_by_you=2` |
 | 不碰用户窗口 | ✅ T1 主动避让、T3 其它窗口零变化 |
 | 不越权关闭 | ✅ 只关自己 own 过的；未出现 kill |
-| 跨 Harness | ✅ DSH headless + Trae CN 均通过（Trae 为人工触发） |
+| 跨 Harness | ⚠️ DSH 已验证（规则确实进入 system prompt）；Trae 的**行为**通过，但**规则加载未验证**（T3 实为 prompt 驱动），已加仓库 `AGENTS.md` 兜底 |
 
 **结论**：**G0 通过**。M0 提示词可以长期留在两台 Harness 的全局指令里。
 

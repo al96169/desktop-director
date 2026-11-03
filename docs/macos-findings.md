@@ -51,3 +51,25 @@
 | `tools/probe_mac.sh` | 只读探针（系统/权限/显示器） |
 | `tools/probe_mac.swift` | CG/AX 只读探针（无签名要求，跑一次就知道 caps） |
 | `tools/ddir_mac_probe.swift` | **配置驱动的 `.app` 探针**：`/tmp/ddir_cmd.json` → `/tmp/ddir_result.json`，支持 caps/list/move/move_abs/close/hide/hide_ax/show/activate/minimize/app_quit |
+## 复测：全部能力打通（2026-11-04）
+
+| 操作 | 结果 |
+|---|---|
+| `caps` | `accessibility=true`、`screen_recording=true`、`window_hide="app"`、其余 true |
+| `move_abs 240,160` | ✅ 读回 `240,160`（`set_err=0`） |
+| `hide_ax`（AX `AXHidden` 属性） | ✅ `set_err=0` —— **AX 隐藏可用，`NSRunningApplication.hide()` 不可用** |
+| `activate` | ✅ 能把 App 唤到前台 |
+| `close`（AX 关闭按钮） | ✅ 窗口关闭、进程存活（与 Windows 语义差异，协议已区分 `close` 与 `quit`） |
+
+## 签名稳定性验证（关键）
+
+用自签证书 `ddir-dev` 签名后，**重新编译二进制并重新签名，TCC 授权仍然有效**（`accessibility=true`、`screen_recording=true`）。
+
+→ 结论：macOS 开发不再需要"每次重编译都让用户点授权"。做法：
+1. `~/.ddir-sign/` 下自签证书（keyUsage=digitalSignature, EKU=codeSigning）
+2. 导入独立 keychain（`ddir.keychain-db`，密码 `ddir`），`security import -T /usr/bin/codesign -A`
+3. 用户在本机信任该证书（`security add-trusted-cert -r trustRoot -k <keychain> cert.pem`，或钥匙串访问里设为始终信任）
+4. `codesign --force --deep --keychain <keychain> -s ddir-dev Ddir.app`
+5. 首次给 App 授权一次，之后不变
+
+> ad-hoc 签名（`codesign -s -`）每次重编译都会失效——这是之前反复掉权限的原因，已弃用。

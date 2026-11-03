@@ -108,6 +108,7 @@ pub fn now_unix() -> u64 {
         .unwrap_or(0)
 }
 
+#[allow(dead_code)]
 pub fn live_leases() -> Vec<Lease> {
     let now = now_unix();
     leases().into_iter().filter(|l| l.expires > now).collect()

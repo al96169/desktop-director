@@ -31,3 +31,6 @@ audit.jsonl
 # 发布包要进仓库
 !dist/*.exe
 !dist/*.zip
+
+demo/
+

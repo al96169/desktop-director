@@ -2,6 +2,7 @@
 //! Lease-based window / software orchestration for AI agents.
 
 mod store;
+mod tray;
 mod win;
 
 use std::process::exit;
@@ -554,7 +555,7 @@ fn cmd_own(args: &[String], disown: bool) -> i32 {
     0
 }
 
-fn cmd_release() -> i32 {
+pub fn release_all() -> (usize, usize) {
     let me = win::agent_id();
     let now = store::now_unix();
     let all = store::leases();
@@ -572,7 +573,47 @@ fn cmd_release() -> i32 {
     }
     store::save_leases(&others);
     store::audit("release", &format!("restored={}", n));
-    println!("{{\"ok\":true,\"released\":{},\"other_leases_kept\":{}}}", n, others.len());
+    (n, others.len())
+}
+
+fn cmd_release() -> i32 {
+    let (n, kept) = release_all();
+    println!("{{\"ok\":true,\"released\":{},\"other_leases_kept\":{}}}", n, kept);
+    0
+}
+
+pub fn autostart_value() -> String {
+    let exe = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default();
+    format!("\"{}\" tray", exe)
+}
+
+pub fn autostart_on() -> bool {
+    let out = std::process::Command::new("reg")
+        .args(["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "ddir-tray"])
+        .output();
+    matches!(out, Ok(o) if o.status.success())
+}
+
+pub fn autostart_set(on: bool) -> bool {
+    if on {
+        let _ = std::process::Command::new("reg")
+            .args(["add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "ddir-tray", "/t", "REG_SZ", "/d", &autostart_value(), "/f"])
+            .status();
+    } else {
+        let _ = std::process::Command::new("reg")
+            .args(["delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "ddir-tray", "/f"])
+            .status();
+    }
+    autostart_on()
+}
+
+fn cmd_autostart(args: &[String]) -> i32 {
+    let action = args.first().cloned().unwrap_or_else(|| "status".into());
+    match action.as_str() {
+        "on" => println!("{{\"ok\":true,\"enabled\":{}}}", autostart_set(true)),
+        "off" => println!("{{\"ok\":true,\"enabled\":{}}}", autostart_set(false)),
+        _ => println!("{{\"ok\":true,\"enabled\":{}}}", autostart_on()),
+    }
     0
 }
 
@@ -666,6 +707,8 @@ fn main() {
         "release" => cmd_release(),
         "board" => cmd_board(),
         "selftest" => cmd_selftest(),
+        "tray" => tray::run(),
+        "autostart" => cmd_autostart(rest),
         "version" | "--version" | "-V" => {
             println!("ddir {} (windows)", VERSION);
             0

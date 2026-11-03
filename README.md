@@ -52,9 +52,9 @@
 
 | # | 里程碑 | 状态 |
 |---|---|---|
-| M0 | 提示词包（`prompts/AGENTS.m0.md`），零安装验证观感 | ✅ 已安装到 DSH + Trae；2 次真实会话测试通过（Gate 部分通过，见 `docs/m0-observations.md`） |
-| M1 | 只读 daemon：枚举/过滤/快照/`ddir plan --dry-run` | 🔶 参考实现已跑通（`tools/ddir.ps1`：list/displays/status/plan/move/claim/release/own）；Rust 版待工具链 |
-| M2 | semi 可写：窗口租约 + 用户所有权 + 撤销栈 | 🔶 简版已可用（claim/release 像素级还原） |
+| M0 | 提示词包（`prompts/AGENTS.m0.md`），零安装验证观感 | ✅ **Gate G0 通过**：4/4 任务（DSH×2、Trae×1、隐藏场景×1），见 `docs/m0-observations.md` |
+| M1 | 只读 daemon：枚举/过滤/快照/`ddir plan --dry-run` | 🔶 参考实现跑通（list/displays/status/plan）；Rust 版待工具链 |
+| M2 | semi 可写：窗口租约 + 用户所有权 + 撤销栈 | 🔶 简版可用：`move/claim/release` 像素级还原、`hide/show`、`close`（仅自己 own 过）、活跃信号 `user_active` |
 | M2.2 | 屏幕托管：`display_uid` + 托盘勾选 + 借用/热插拔 | 未开始（当前单屏 + 静态托管策略） |
 | M2.5 | auto 处决：武装倒计时 + `WM_CLOSE` 管道 + `undo-close` | 未开始 |
 | M3 | 托盘三档 | 未开始 |

@@ -22,6 +22,9 @@
 | D15 | **单屏时 semi 也托管这块屏**（否则 semi 无事可做） | 决策 D8 假设 ≥2 屏；实测本机单屏，托管集合为空会让 semi 完全失效 | `managed = (display_count <= 1) or (not primary)`；单屏时退回"不遮挡用户前台窗口"的启发式 |
 | D16 | **M1 先交 PowerShell 参考实现**（`tools/ddir.ps1`），Rust 正式版待工具链 | 实测本机无 cargo/rustc/gcc/.NET SDK，Docker 引擎未启动；而 M0 要真实会话测试就必须先有可调用的 `ddir` | 参考实现只做只读 + `move/claim/release/own`，**不实现 close**；Rust 版按 `docs/plan.md` 的 crate 划分重写，行为以 `docs/protocol.md` 为准 |
 | D17 | **M0 的安装位置固定三处**：`~/.dsh/AGENTS.md`、`~/.trae-cn/user_rules/rule-*.md`、测试用 `.testhome/AGENTS.md` | 一个 Harness 一份全局指令，内容同源 | 改 `prompts/AGENTS.m0.md` 后三处一起覆盖；`.testhome/` 含本机凭据，必须 gitignore |
+| D18 | **Agent 身份 = 父进程链上的宿主进程**（Trae / 终端 / 执行器），不是本次调用的 PID | 实测 `own` 之后立刻 `hide` 会因 PID 变化报 `owned_by_other`，身份不稳定会废掉所有跨调用语义 | `DDIR_AGENT` 可覆盖；宿主进程退出即身份失效（符合直觉） |
+| D19 | **用户活跃信号 = 光标位移 >25px 或前台窗口变化**，`input_age_s` 只作原始值照实报告 | 本机有鼠标抖动/注入（Bloody6 类常驻工具），`GetLastInputInfo` 长期为 0，单用它会让"空闲判断"永远失真 | 判定结果写进 `user_active`；`claim/move` 遇 `user_active` 可 `--force`；后续可加键盘专用信号 |
+| D20 | **`hide`/`close` 都要求先 `own`**；`close` 只发 `WM_CLOSE` 等 3s，失败即 `close_blocked`，不重试不强杀 | 关闭是唯一会丢数据的动作，必须挂在"负责人"语义上；也顺手把 M2.5 的闸门做进参考实现 | `not_owned` / `owned_by_other` 直接拒绝；`release` 同时还原隐藏与位置 |
 
 ## 待观察（还没定，先记着）
 

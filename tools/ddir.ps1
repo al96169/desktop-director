@@ -52,6 +52,12 @@ public class DDIR {
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
   [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
+  [DllImport("user32.dll")] public static extern bool PostMessageW(IntPtr h, uint msg, IntPtr w, IntPtr l);
+  [DllImport("kernel32.dll")] public static extern uint GetTickCount();
+  public struct POINT { public int X, Y; }
+  public const uint WM_CLOSE = 0x0010;
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool GetLastInputInfo(ref LASTINPUTINFO li);
   [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int attr, out int val, int sz);
@@ -102,11 +108,19 @@ public class DDIR {
     long ex = GetWindowLongPtrW(h, GWL_EXSTYLE).ToInt64();
     return (ex & WS_EX_TOOLWINDOW) != 0;
   }
-  public static uint IdleSeconds() {
+  public static int IdleSeconds() {
     var li = new LASTINPUTINFO();
     li.cbSize = (uint)Marshal.SizeOf(typeof(LASTINPUTINFO));
-    if (!GetLastInputInfo(ref li)) return 0;
-    return ((uint)Environment.TickCount - li.dwTime) / 1000;
+    if (!GetLastInputInfo(ref li)) return -1;
+    return (int)((GetTickCount() - li.dwTime) / 1000);
+  }
+  public static int[] Cursor() {
+    POINT p;
+    if (!GetCursorPos(out p)) return new int[] { -1, -1 };
+    return new int[] { p.X, p.Y };
+  }
+  public static bool CloseGraceful(IntPtr h) {
+    return PostMessageW(h, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
   }
 }
 "@ -ErrorAction Stop
@@ -134,8 +148,48 @@ function Get-Apps {
   if (Test-Path $AppsFile) { Get-Content $AppsFile -Raw | ConvertFrom-Json } else { [pscustomobject]@{} }
 }
 function Save-Apps($a) { $a | ConvertTo-Json -Depth 6 | Set-Content -Path $AppsFile -Encoding UTF8 }
+$ActivityFile = Join-Path $Home_ "activity.json"
+function Get-Activity {
+  $age = [DDIR]::IdleSeconds()
+  $cur = [DDIR]::Cursor()
+  $fg = $null
+  foreach ($w in Get-Windows) { if ($w.foreground) { $fg = $w; break } }
+  $prev = $null
+  if (Test-Path $ActivityFile) { try { $prev = Get-Content $ActivityFile -Raw | ConvertFrom-Json } catch { } }
+  $moved = 0
+  if ($prev -and $prev.cursor) { $moved = [Math]::Abs([int]$cur[0] - [int]$prev.cursor[0]) + [Math]::Abs([int]$cur[1] - [int]$prev.cursor[1]) }
+  $fgChanged = [bool]($prev -and $prev.fg -and $fg -and ($prev.fg -ne $fg.hwnd))
+  # 本机有鼠标抖动/注入（Bloody6 之类），原始 input_age 长期为 0，不能单独作为活跃信号
+  $active = ($moved -gt 25) -or $fgChanged
+  $rec = [pscustomobject]@{ ts = (Get-Date).ToString("o"); cursor = $cur; fg = $(if ($fg) { $fg.hwnd } else { $null }) }
+  ($rec | ConvertTo-Json -Compress) | Set-Content -Path $ActivityFile -Encoding UTF8
+  [pscustomobject]@{
+    input_age_s = $age
+    cursor_moved_px = $moved
+    foreground_changed = $fgChanged
+    user_active = $active
+    signal = "cursor+foreground (raw input_age unreliable on this box)"
+  }
+}
 
-$script:Agent = if ($env:DDIR_AGENT) { $env:DDIR_AGENT } else { "pid-$PID" }
+function Get-AgentId {
+  if ($env:DDIR_AGENT) { return $env:DDIR_AGENT }
+  # 身份必须跨多次调用稳定：往上找"宿主进程"（Trae/终端/执行器），而不是每次都用本次 powershell 的 PID
+  $curPid = $PID
+  $curName = "powershell"
+  for ($k = 0; $k -lt 10; $k++) {
+    $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$curPid" -ErrorAction SilentlyContinue
+    if (-not $proc) { break }
+    $parent = Get-CimInstance Win32_Process -Filter "ProcessId=$($proc.ParentProcessId)" -ErrorAction SilentlyContinue
+    if (-not $parent) { break }
+    if ($parent.Name -match '^(explorer|services|svchost|wininit|winlogon|RuntimeBroker)\.exe$') { break }
+    $curPid = $parent.ProcessId
+    $curName = $parent.Name
+  }
+  $base = [System.IO.Path]::GetFileNameWithoutExtension($curName)
+  return ("{0}-{1}" -f $base, $curPid)
+}
+$script:Agent = Get-AgentId
 $ExcludeClasses = @("Progman", "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "Windows.UI.Core.CoreWindow",
   "ApplicationFrameInputSinkWindow", "MSCTFIME UI", "IME", "SoPY_Hint", "Sogou_TSF_UI", "Default IME",
   "NVIDIA GeForce Overlay DT", "CEF-OSC-WIDGET", "ForegroundStaging", "MultitaskingViewFrame")
@@ -304,7 +358,7 @@ function Invoke-Claim([string]$needsSpec, [switch]$DryRun) {
       if ([DDIR]::IsZoomed($h)) { [void][DDIR]::ShowWindow($h, [DDIR]::SW_RESTORE); Start-Sleep -Milliseconds 60 }
       [void][DDIR]::SetWindowPos($h, [IntPtr]::Zero, $a.rect[0], $a.rect[1], $a.rect[2], $a.rect[3],
         ([DDIR]::SWP_NOZORDER -bor [DDIR]::SWP_NOACTIVATE -bor [DDIR]::SWP_SHOWWINDOW))
-      $items += [pscustomobject]@{ window = $a.window; from = $a.from; to = $a.rect }
+      $items += [pscustomobject]@{ window = $a.window; action = "move"; from = $a.from; to = $a.rect }
     }
     $state.items = @($state.items) + $items
     Save-State $state
@@ -312,6 +366,23 @@ function Invoke-Claim([string]$needsSpec, [switch]$DryRun) {
     return [pscustomobject]@{ ok = $true; lease = $state.lease; mode = $mode; displays_managed = @($managed.uid); assign = $assign; focus = "none" }
   }
   return [pscustomobject]@{ ok = $true; dry_run = $true; mode = $mode; displays_managed = @($managed.uid); assign = $assign; focus = "none" }
+}
+
+function Resolve-OwnedWindow([string]$hwnd) {
+  $win = (Get-Windows) | Where-Object { $_.hwnd -eq $hwnd } | Select-Object -First 1
+  if (-not $win) { return [pscustomobject]@{ ok = $false; error = "no_window" } }
+  $apps = Get-Apps
+  $rec = $apps.PSObject.Properties | Where-Object { $_.Value.app -eq $win.app } | Select-Object -First 1
+  if (-not $rec) { return [pscustomobject]@{ ok = $false; error = "not_owned"; win = $win; hint = ("先 ddir own --app `"$($win.app)`" 认领，再操作它") } }
+  if ($rec.Value.owner -ne $script:Agent) { return [pscustomobject]@{ ok = $false; error = "owned_by_other"; win = $win; owner_agent = $rec.Value.owner; owner_since = $rec.Value.since } }
+  [pscustomobject]@{ ok = $true; win = $win; app = $win.app }
+}
+function Add-StateItem($item) {
+  $st = Get-State
+  if (-not $st) { $st = [pscustomobject]@{ lease = ("ls_" + [guid]::NewGuid().ToString("N").Substring(0, 6)); agent = $script:Agent; mode = (Get-Mode); created = (Get-Date).ToString("o"); items = @() } }
+  $st.items = @($st.items) + $item
+  Save-State $st
+  $st.lease
 }
 
 # ---------- dispatch ----------
@@ -328,8 +399,9 @@ ddir — Desktop Director 参考实现（M1 行为参考 / M0 测试台）
   ddir claim [--needs "a:1000x700,b"]  申请并摆放（SetWindowPos，不抢焦点）
   ddir move --window 0x... --rect x,y,w,h
   ddir release [--all]                 还原到 claim 前的位置
+  ddir hide --window 0x... / show --window 0x...   隐藏/显示（需先 own）
   ddir own --app <name> / disown --app <name>
-  ddir close                           参考实现不支持（M2.5 才做）
+  ddir close --window 0x...            优雅关闭（仅限自己 own 过的 app；WM_CLOSE，不重试）
   ddir board                           看板
 
 环境变量：DDIR_HOME（默认 ~\.ddir）、DDIR_AGENT（调用方标识，默认 pid-<PID>）
@@ -337,9 +409,11 @@ ddir — Desktop Director 参考实现（M1 行为参考 / M0 测试台）
     break
   }
   "mode" {
-    if ($Rest -and $Rest.Count -gt 0) { Set-Mode $Rest[0]; Write-Audit "mode" @{ to = $Rest[0] } }
-    $o = [pscustomobject]@{ ok = $true; mode = (Get-Mode); agent = $script:Agent; user_active = ([DDIR]::IdleSeconds() -lt 5); user_idle_s = [DDIR]::IdleSeconds() }
-    Write-Json $o
+    if ($Rest -and $Rest.Count -gt 0 -and (@("off", "semi", "auto") -contains $Rest[0])) { Set-Mode $Rest[0]; Write-Audit "mode" @{ to = $Rest[0] } }
+    $a = Get-Activity
+    Write-Json ([pscustomobject]@{ ok = $true; mode = (Get-Mode); agent = $script:Agent
+      input_age_s = $a.input_age_s; user_active = $a.user_active
+      cursor_moved_px = $a.cursor_moved_px; foreground_changed = $a.foreground_changed; signal = $a.signal })
     break
   }
   "displays" {
@@ -359,14 +433,21 @@ ddir — Desktop Director 参考实现（M1 行为参考 / M0 测试台）
   "status" {
     $state = Get-State
     $apps = Get-Apps
+    $a = Get-Activity
+    $hide = 0
+    if ($state) { $hide = @($state.items | Where-Object { $_.action -eq "hide" }).Count }
     $o = [pscustomobject]@{
       ok = $true; mode = (Get-Mode); you = $script:Agent
       leases = $(if ($state) { 1 } else { 0 })
       lease = $(if ($state) { $state.lease } else { $null })
       owns = @($apps.PSObject.Properties | Where-Object { $_.Value.owner -eq $script:Agent } | ForEach-Object { $_.Name })
+      hidden_by_you = $hide
       focus_holder = "none"
-      user_active = ([DDIR]::IdleSeconds() -lt 5)
-      user_idle_s = [DDIR]::IdleSeconds()
+      input_age_s = $a.input_age_s
+      user_active = $a.user_active
+      cursor_moved_px = $a.cursor_moved_px
+      foreground_changed = $a.foreground_changed
+      signal = $a.signal
     }
     Write-Json $o
     break
@@ -379,6 +460,10 @@ ddir — Desktop Director 参考实现（M1 行为参考 / M0 测试台）
   }
   "claim" {
     $needs = ($Rest | Where-Object { $_ -notlike "--*" } | Select-Object -First 1)
+    if (-not ($Rest -contains "--force")) {
+      $a = Get-Activity
+      if ($a.user_active) { Write-Json ([pscustomobject]@{ ok = $false; error = "user_active"; user_active = $true; hint = "用户正在操作；等它空闲，或加 --force" }); break }
+    }
     $r = Invoke-Claim -needsSpec $needs
     Write-Json $r
     break
@@ -399,6 +484,10 @@ ddir — Desktop Director 参考实现（M1 行为参考 / M0 测试台）
     }
     if (-not $hwnd -or -not $rect) { Write-Json ([pscustomobject]@{ ok = $false; error = "invalid_args"; hint = "move --window 0x... --rect x,y,w,h" }); break }
     if ($rect -is [array]) { $p = @($rect | ForEach-Object { [int]$_ }) } else { $p = @($rect -split "," | ForEach-Object { [int]$_ }) }
+    if (-not ($Rest -contains "--force")) {
+      $a = Get-Activity
+      if ($a.user_active) { Write-Json ([pscustomobject]@{ ok = $false; error = "user_active"; user_active = $true; hint = "用户正在操作；等它空闲，或加 --force" }); break }
+    }
     $h = [IntPtr][Convert]::ToInt64($hwnd, 16)
     $ok = [DDIR]::SetWindowPos($h, [IntPtr]::Zero, $p[0], $p[1], $p[2], $p[3],
       ([DDIR]::SWP_NOZORDER -bor [DDIR]::SWP_NOACTIVATE -bor [DDIR]::SWP_SHOWWINDOW))
@@ -412,6 +501,7 @@ ddir — Desktop Director 参考实现（M1 行为参考 / M0 测试台）
     $n = 0
     foreach ($it in @($state.items)) {
       $h = [IntPtr][Convert]::ToInt64($it.window, 16)
+      if ($it.action -eq "hide") { [void][DDIR]::ShowWindow($h, 4); $n++; continue }
       [void][DDIR]::SetWindowPos($h, [IntPtr]::Zero, $it.from[0], $it.from[1], $it.from[2], $it.from[3],
         ([DDIR]::SWP_NOZORDER -bor [DDIR]::SWP_NOACTIVATE -bor [DDIR]::SWP_SHOWWINDOW))
       $n++
@@ -428,8 +518,13 @@ ddir — Desktop Director 参考实现（M1 行为参考 / M0 测试台）
     $apps = Get-Apps
     $existing = $apps.PSObject.Properties | Where-Object { $_.Value.app -eq $app } | Select-Object -First 1
     if ($existing -and $existing.Value.owner -ne $script:Agent) {
+      $since = $null
+      try { $since = [datetime]::Parse($existing.Value.since) } catch { }
+      $expired = ($since -and (((Get-Date) - $since).TotalSeconds -gt [double]$existing.Value.ttl_s))
+      if (-not $expired) {
       Write-Json ([pscustomobject]@{ ok = $false; error = "owned_by_other"; owner_agent = $existing.Value.owner; owner_since = $existing.Value.since; hint = "换实例或等它 disown" })
       break
+      }
     }
     $rec = [pscustomobject]@{ app = $app; owner = $script:Agent; since = (Get-Date).ToString("o"); ttl_s = 1800 }
     if ($existing) { $apps.($existing.Name) = $rec } else { $apps | Add-Member -NotePropertyName $app -NotePropertyValue $rec -Force }
@@ -449,14 +544,53 @@ ddir — Desktop Director 参考实现（M1 行为参考 / M0 测试台）
     break
   }
   "close" {
-    Write-Json ([pscustomobject]@{ ok = $false; error = "mode_off"; hint = "参考实现（M1）不实现关闭；关闭属于 M2.5，需走武装流程" })
+    $hwnd = $null
+    for ($i = 0; $i -lt $Rest.Count; $i++) { if ($Rest[$i] -eq "--window") { $hwnd = $Rest[$i + 1] } }
+    if (-not $hwnd) { Write-Json ([pscustomobject]@{ ok = $false; error = "invalid_args"; hint = "close --window 0x..." }); break }
+    $r = Resolve-OwnedWindow $hwnd
+    if (-not $r.ok) { Write-Json ([pscustomobject]@{ ok = $false; error = $r.error; hint = $r.hint; owner_agent = $r.owner_agent; owner_since = $r.owner_since }); break }
+    $h = [IntPtr][Convert]::ToInt64($hwnd, 16)
+    [void][DDIR]::CloseGraceful($h)
+    $dead = $false
+    for ($k = 0; $k -lt 30; $k++) { Start-Sleep -Milliseconds 100; if (-not [DDIR]::IsWindow($h)) { $dead = $true; break } }
+    Write-Audit "close" @{ window = $hwnd; app = $r.app; closed = $dead }
+    if ($dead) {
+      Write-Json ([pscustomobject]@{ ok = $true; closed = $true; window = $hwnd; app = $r.app })
+    } else {
+      Write-Json ([pscustomobject]@{ ok = $false; error = "close_blocked"; window = $hwnd
+        reason = "3 秒内未退出（可能有未保存内容或模态框）；不重试、不强杀" })
+    }
+    break
+  }
+  "hide" {
+    $hwnd = $null
+    for ($i = 0; $i -lt $Rest.Count; $i++) { if ($Rest[$i] -eq "--window") { $hwnd = $Rest[$i + 1] } }
+    if (-not $hwnd) { Write-Json ([pscustomobject]@{ ok = $false; error = "invalid_args"; hint = "hide --window 0x..." }); break }
+    $r = Resolve-OwnedWindow $hwnd
+    if (-not $r.ok) { Write-Json ([pscustomobject]@{ ok = $false; error = $r.error; hint = $r.hint; owner_agent = $r.owner_agent }); break }
+    $h = [IntPtr][Convert]::ToInt64($hwnd, 16)
+    [void][DDIR]::ShowWindow($h, 0)
+    $null = Add-StateItem ([pscustomobject]@{ window = $hwnd; action = "hide"; from = $r.win.win })
+    Write-Audit "hide" @{ window = $hwnd; app = $r.app }
+    Write-Json ([pscustomobject]@{ ok = $true; hidden = $true; window = $hwnd; app = $r.app })
+    break
+  }
+  "show" {
+    $hwnd = $null
+    for ($i = 0; $i -lt $Rest.Count; $i++) { if ($Rest[$i] -eq "--window") { $hwnd = $Rest[$i + 1] } }
+    if (-not $hwnd) { Write-Json ([pscustomobject]@{ ok = $false; error = "invalid_args"; hint = "show --window 0x..." }); break }
+    $h = [IntPtr][Convert]::ToInt64($hwnd, 16)
+    [void][DDIR]::ShowWindow($h, 4)
+    Write-Audit "show" @{ window = $hwnd }
+    Write-Json ([pscustomobject]@{ ok = $true; shown = $true; window = $hwnd })
     break
   }
   "board" {
     $state = Get-State
     $apps = Get-Apps
     $mode = Get-Mode
-    "== ddir mode $mode   焦点 none   用户空闲 $([DDIR]::IdleSeconds())s"
+    $act = Get-Activity
+    "== ddir mode $mode   焦点 none   input_age=$($act.input_age_s)s  user_active=$($act.user_active)  cursor_moved=$($act.cursor_moved_px)px"
     "== 窗口 $(@(Get-Windows).Count) 个（托管屏 $((Get-ManagedDisplays | ForEach-Object { $_.uid }) -join ',')）"
     if ($state) { "== lease $($state.lease) by $($state.agent)，持有 $($state.items.Count) 个窗口" } else { "== 无租约" }
     foreach ($p in $apps.PSObject.Properties) { "== owned: $($p.Value.app) -> $($p.Value.owner)" }

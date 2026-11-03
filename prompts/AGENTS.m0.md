@@ -1,6 +1,6 @@
 # Desktop Director（ddir）— 窗口编排规矩
 
-> 安装版（v1.1，2026-11-03，首次真实会话测试后修订）。适用于任何接入本机的 Agent。
+> 安装版（v1.2，2026-11-03，跨 Harness 实测后修订）。适用于任何接入本机的 Agent。
 > 完整版与设计见 `F:\desktop-director\prompts\AGENTS.ddir.md`。
 
 ## 什么时候生效
@@ -26,6 +26,8 @@ ddir status      # 租约、你负责的软件、用户是否在动
 5. 一次改一个窗口，改完 `ddir status` 确认，再改下一个。
 6. 跨屏摆放不算"更大"，算越界；横跨两屏会被拒绝（`spans_displays`）。
 7. 用 `--rect` 时**一定加引号**：`ddir move --window 0x... --rect "0,0,1280,918"`；不加引号会被 PowerShell 按逗号拆成 4 个参数。
+8. 多余的窗口**收起来而不是关掉**：先 `ddir own --app <名字>`，再 `ddir hide --window <hwnd>`；任务结束 `ddir release --all` 会把隐藏与位置一起还原。
+9. 如果 `claim` / `move` 返回 `user_active`，说明用户正在操作：等它空闲，或加 `--force`（并说明理由）。
 
 ## 用软件时（防止被别的 Agent 关掉）
 
@@ -35,7 +37,8 @@ ddir disown --app "Code"   # 干完还回去
 ```
 
 - 返回 `owned_by_other` → 别的 Agent 正在用，换实例或换方案，**不要重试**。
-- 关闭软件**只能**通过 `ddir close`。**永远不要** `taskkill` / `Stop-Process` / `kill`。
+- 关闭软件**只能**通过 `ddir close --window <hwnd>`：只能关自己 `own` 过的（否则 `not_owned`），只发 `WM_CLOSE`、等 3 秒；返回 `close_blocked` 说明有未保存内容，**不要重试**。
+- **永远不要** `taskkill` / `Stop-Process` / `kill`（绕过会被记 `unmanaged_kill` 并降档）。
 
 ## 严禁
 

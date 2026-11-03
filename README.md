@@ -52,15 +52,15 @@
 
 | # | 里程碑 | 状态 |
 |---|---|---|
-| M0 | 提示词包（`prompts/AGENTS.ddir.md`），零安装验证观感 | ← **当前** |
-| M1 | 只读 daemon：枚举/过滤/快照/`ddir plan --dry-run` | |
-| M2 | semi 可写：窗口租约 + 用户所有权 + 撤销栈 | |
-| M2.2 | 屏幕托管：`display_uid` + 托盘勾选 + 借用/热插拔 | |
-| M2.5 | auto 处决：武装倒计时 + `WM_CLOSE` 管道 + `undo-close` | |
-| M3 | 托盘三档 | |
-| M4 | HUD 装饰层（缩略图墙 / 暗化 / 入场动画） | |
-| M5 | 多 Agent 仲裁：`claim/own/close/revoke` + 看板 | |
-| M6 | auto × 多 Agent：关闭保护 + `unmanaged_kill` 检测降档 | |
+| M0 | 提示词包（`prompts/AGENTS.m0.md`），零安装验证观感 | ✅ 已安装到 DSH + Trae；2 次真实会话测试通过（Gate 部分通过，见 `docs/m0-observations.md`） |
+| M1 | 只读 daemon：枚举/过滤/快照/`ddir plan --dry-run` | 🔶 参考实现已跑通（`tools/ddir.ps1`：list/displays/status/plan/move/claim/release/own）；Rust 版待工具链 |
+| M2 | semi 可写：窗口租约 + 用户所有权 + 撤销栈 | 🔶 简版已可用（claim/release 像素级还原） |
+| M2.2 | 屏幕托管：`display_uid` + 托盘勾选 + 借用/热插拔 | 未开始（当前单屏 + 静态托管策略） |
+| M2.5 | auto 处决：武装倒计时 + `WM_CLOSE` 管道 + `undo-close` | 未开始 |
+| M3 | 托盘三档 | 未开始 |
+| M4 | HUD 装饰层（缩略图墙 / 暗化 / 入场动画） | 未开始 |
+| M5 | 多 Agent 仲裁：`claim/own/close/revoke` + 看板 | 未开始 |
+| M6 | auto × 多 Agent：关闭保护 + `unmanaged_kill` 检测降档 | 未开始 |
 
 > 执行顺序、任务拆分、人日/日历估算与每档 Gate 见 **[docs/plan.md](docs/plan.md)**。
 > 建议顺序 `M1 → M2 → M3(最小托盘) → M2.2 → M2.5 → M5 → M6`；R1 到手即"日常可用的半自动"。
@@ -69,11 +69,14 @@
 
 ```
 desktop-director/
-├─ prompts/AGENTS.ddir.md   # M0：贴进全局或项目 AGENTS.md 的提示词包
+├─ prompts/AGENTS.m0.md      # M0 安装版（贴进 AGENTS.md / Trae user_rules）
+├─ prompts/AGENTS.ddir.md    # M0 详细版（含错误码与理由）
+├─ tools/ddir.ps1|.cmd       # 参考实现（只读 + move/claim/release；无 Rust 工具链时的替代）
 ├─ docs/plan.md             # 开发规划：发布节奏、Gate、任务拆分、估时、风险
 ├─ docs/protocol.md         # 协议草案（两类资源、错误码、不变量、验收用例）
 ├─ docs/decisions.md        # 已定决策（ADR 简版），避免反复讨论
-└─ src/                     # 代码（M1 起 Rust workspace：core/win/hud/cli）
+├─ docs/m0-observations.md  # M0 真实会话测试记录
+└─ src/                     # Rust workspace（M1 正式版：core/win/hud/cli）
 ```
 
 ## 快速开始（M0）

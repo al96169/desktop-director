@@ -19,6 +19,9 @@
 | D12 | **不耦合任何 Harness**：CLI + 管道 + MCP + 本地 HTTP，Harness 侧只放提示词 | 用户明确要求；不同 Harness 接入能力不同 | 协议层必须与模型无关 |
 | D13 | **写操作默认 dry-run，编译期用 feature gate 禁止** | 开发期最怕"调试时把用户桌面搞乱"，靠自觉不可靠 | `exec` 只在 `feature = "write"` 下编译进二进制；M2 前默认二进制里没有 `SetWindowPos` |
 | D14 | **协议在 R1 结束冻结 v1.0** | Agent 提示词里写死了错误码处理，改语义会静默破坏所有接入方 | 之后 op 只增、错误码只增；不兼容变更升主版本并在 daemon 返回 `proto` 字段 |
+| D15 | **单屏时 semi 也托管这块屏**（否则 semi 无事可做） | 决策 D8 假设 ≥2 屏；实测本机单屏，托管集合为空会让 semi 完全失效 | `managed = (display_count <= 1) or (not primary)`；单屏时退回"不遮挡用户前台窗口"的启发式 |
+| D16 | **M1 先交 PowerShell 参考实现**（`tools/ddir.ps1`），Rust 正式版待工具链 | 实测本机无 cargo/rustc/gcc/.NET SDK，Docker 引擎未启动；而 M0 要真实会话测试就必须先有可调用的 `ddir` | 参考实现只做只读 + `move/claim/release/own`，**不实现 close**；Rust 版按 `docs/plan.md` 的 crate 划分重写，行为以 `docs/protocol.md` 为准 |
+| D17 | **M0 的安装位置固定三处**：`~/.dsh/AGENTS.md`、`~/.trae-cn/user_rules/rule-*.md`、测试用 `.testhome/AGENTS.md` | 一个 Harness 一份全局指令，内容同源 | 改 `prompts/AGENTS.m0.md` 后三处一起覆盖；`.testhome/` 含本机凭据，必须 gitignore |
 
 ## 待观察（还没定，先记着）
 

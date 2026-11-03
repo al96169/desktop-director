@@ -11,6 +11,9 @@ npm-debug.log*
 *.log
 audit.jsonl
 
+# 测试隔离环境（含本机凭据，绝不入库）
+.testhome/
+
 # 构建产物
 *.exe
 *.pdb

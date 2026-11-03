@@ -28,6 +28,8 @@ powershell -ExecutionPolicy Bypass -File dist\install.ps1
 ddir mode              # off / semi / auto
 ddir list --text       # 过滤到 Alt-Tab 级的窗口列表
 ddir selftest          # 平台能力自检（7 项）
+ddir tray              # 托盘常驻（右键：模式 / 全部还原 / 窗口列表 / 开机自启）
+ddir autostart on      # 开机自启（注册到 HKCU Run）
 
 # 3) 给 Agent 装上规矩（可选）
 powershell -ExecutionPolicy Bypass -File dist\install.ps1 -WithPrompt
@@ -80,7 +82,7 @@ target\release\ddir.exe selftest
 | M2 | semi 可写：窗口租约 + 用户所有权 + 撤销 | ✅ `claim/move/hide/show/close/release/own`，`release` 像素级还原，`user_active` 冷却 |
 | M2.2 | 屏幕托管：`display_uid` + 托盘勾选 + 借用/热插拔 | 未开始（当前单屏 + 静态托管策略） |
 | M2.5 | auto 处决：武装倒计时 + `WM_CLOSE` 管道 + `undo-close` | 未开始 |
-| M3 | 托盘三档 | 未开始 |
+| M3 | 托盘三档 | ✅ **Rust 原生托盘**（`ddir tray`）：三档切换 / 全部还原 / 窗口列表 / 开机自启 / 单实例，7.8MB 内存 |
 | M4 | HUD 装饰层（缩略图墙 / 暗化 / 入场动画） | 未开始 |
 | M5 | 多 Agent 仲裁：`claim/own/close/revoke` + 看板 | 🔶 租约排他（I1）+ `window_owned_by` + `board`，已用双 Agent 抢屏验证；优先级/抢占未完 |
 | M6 | auto × 多 Agent：关闭保护 + `unmanaged_kill` 检测降档 | 未开始 |
@@ -96,6 +98,7 @@ desktop-director/
 ├─ prompts/AGENTS.ddir.md    # M0 详细版（含错误码与理由）
 ├─ src/                     # Rust 0.1.0（main.rs / win.rs / store.rs）
 ├─ dist/                    # 可直接用的发布包（ddir.exe + install.ps1 + 提示词 + zip）
+├─ tools/ddir-tray.ps1      # 托盘预览版（PowerShell，已被 `ddir tray` 取代）
 ├─ tools/ddir.ps1|.cmd       # 早期 PowerShell 参考实现（保留作行为对照）
 ├─ tools/dev-env.cmd          # 开发环境（MinGW-w64 + cargo，见 docs/toolchain.md）
 ├─ docs/plan.md             # 开发规划：发布节奏、Gate、任务拆分、估时、风险

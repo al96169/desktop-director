@@ -1,5 +1,20 @@
 ﻿# Changelog
 
+## 0.2.0 - 2026-11-04
+
+### Rust 原生托盘（M3）
+
+- `ddir tray`：Win32 Shell_NotifyIcon，单实例（命名互斥体），7.8 MB 内存（旧 PowerShell 预览版约 40 MB）
+- 右键菜单：状态 / 模式（off·semi·auto，带勾选）/ 全部还原 / 窗口列表（前 8 个）/ 开机自启 / 打开项目目录 / 退出
+- 每 3 秒刷新 tooltip：`ddir - <mode> - <n> lease(s)`
+- `ddir autostart on|off|status`：写入/删除 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
+- 双击托盘图标弹气泡状态
+
+### 其它
+
+- 托盘与 CLI 共用 `~/.ddir` 状态：CLI 切模式，托盘下一次刷新即同步
+- 保留 `tools/ddir-tray.ps1` 作为预览/对照实现
+
 ## 0.1.1 - 2026-11-04
 
 ### 并排，不再叠放

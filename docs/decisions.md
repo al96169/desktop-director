@@ -35,3 +35,8 @@
 - `stateless` 程序的强杀白名单要不要留（当前倾向：不留）。
 - 是否要"布局预设 + 按任务类型记忆"（可能比多 Agent 协调更早见效）。
 - 许可证（倾向 MIT，与其他个人项目一致）。
+| D23 | **多平台是硬需求**：Windows / macOS / Linux 三平台，协议与仲裁一份、后端各一份 | 用户明确要求；单一 Windows 实现会把语义写死，后面拆不出来 | ddir-core 零平台依赖；ddir-win / ddir-mac / ddir-linux 各自实现 Backend trait |
+| D24 | **daemon 启动自报 platform + caps**，Agent 按 caps 决策 | 三平台能力差异巨大（macOS 只能应用级隐藏、Wayland 不能摆窗口），让 Agent 猜必然出错 | 写操作前先看 caps；不支持的能力返回 unsupported_on_platform，而不是静默失效 |
+| D25 | **macOS 用 Accessibility API（AX）**，不用 AppleScript/SIP hack | AX 是唯一稳定的窗口摆放途径（yabai/AeroSpace 同路线）；AppleScript 走 System Events 更慢且同样要 TCC | 需要用户授权"辅助功能 + 屏幕录制"；未授权时只读降级 |
+| D26 | **Linux 分档：X11 全支持 / Hyprland-KWin 半支持 / GNOME Wayland 明牌不支持** | Wayland 没有通用窗口控制协议，这是安全模型的必然结果，不是实现偷懒 | caps 如实报告；GNOME 下只做启动与观察，文档写明 |
+| D27 | **每个后端必须通过 ddir selftest 才发布** | 跨平台最大的坑是"以为做到了"；三套系统各有一套边界行为 | selftest 输出逐条 pass/fail，作为发布门槛（见 docs/platforms.md §4） |

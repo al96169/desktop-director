@@ -9,7 +9,7 @@
 | 命令 / 可执行 | `ddir`（`ddir daemon` 常驻，`ddir <cmd>` 是客户端，同一个 exe） |
 | 状态目录 | `~/.ddir/`（config.json / apps.json / audit.jsonl / state.json） |
 | 本机 IPC | 命名管道 `\\.\pipe\ddir`；HTTP `127.0.0.1:7717`（给跨语言适配器 / 看板） |
-| 平台 | Windows 11 优先（macOS 后续，Linux 不做） |
+| 平台 | **Windows / macOS / Linux 三平台**（协议一份，后端各一份；能力差异见 [docs/platforms.md](docs/platforms.md)） |
 | 设计报告 | `F:\obsidian_vault\everythink\项目\个人项目\Agent桌面自动化窗口调整&多Agent窗口协调软件\研究分析报告.md` |
 
 ---
@@ -76,7 +76,7 @@ desktop-director/
 ├─ docs/protocol.md         # 协议草案（两类资源、错误码、不变量、验收用例）
 ├─ docs/decisions.md        # 已定决策（ADR 简版），避免反复讨论
 ├─ docs/m0-observations.md  # M0 真实会话测试记录
-└─ src/                     # Rust workspace（M1 正式版：core/win/hud/cli）
+└─ src/                     # Rust workspace（core / win / mac / linux / hud / cli）
 ```
 
 ## 快速开始（M0）

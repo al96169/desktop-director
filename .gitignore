@@ -24,3 +24,4 @@ audit.jsonl
 .vscode/
 .idea/
 *.swp
+.install-rust.log

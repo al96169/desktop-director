@@ -235,6 +235,18 @@ chore: 协议冻结 checklist
 
 ---
 
+## 5.5 多平台（2026-11-03 新增需求）
+
+三平台拆分见 `docs/platforms.md`，这里只放节奏：
+
+| 新增里程碑 | 内容 | 估时 | Gate |
+|---|---|---|---|
+| **M5.5** | 协议加 `platform`/`caps`、`Backend` trait 抽出、`ddir selftest` 一致性套件 | 3–4 人日 | Windows 参考实现能跑通 selftest 全部用例 |
+| **M7** | macOS 后端（AX 摆放/关闭/空闲 + TCC 检测 + 未授权降级） | 6–8 人日 | 关掉辅助功能时 `caps.accessibility=false` 且只读；授权后 selftest 全绿 |
+| **M8** | Linux X11（EWMH） | 4–6 人日 | X11 会话下 selftest 全绿 |
+| **M9** | Wayland：Hyprland IPC → KWin 脚本；GNOME 明牌不支持 | 5–8 人日 | `caps` 如实报告；无法摆放时返回 `compositor_unsupported` |
+
+顺序：**M5.5 必须先做**——否则每个平台会各写一套私有语义，`ddir-core` 也会被 Windows 概念污染。
 ## 6. 风险登记（触发 → 应对）
 
 | 风险 | 触发信号 | 应对 |

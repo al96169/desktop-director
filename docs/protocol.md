@@ -104,6 +104,28 @@ focus    (holder: agent_id, until)                   —— 全局唯一
 2. **处决**：每轮 ≤3 个，`PostMessage(WM_CLOSE)` → 等 8s → 没退 = `close_blocked`，不重试、不强杀。
 3. **撤销**：关闭前记 `restart{cmd,args,cwd,rect}`，`ddir undo-close` 重启还原；记录留 24h。
 
+## 4.5 平台能力（`status` / `mode` 返回）
+
+```jsonc
+{
+  "platform": "windows|macos|linux-x11|linux-wayland-hyprland|linux-wayland-kwin|linux-wayland-other",
+  "caps": {
+    "window_move": true,
+    "window_hide": "window|app|false",
+    "window_close": true,
+    "focus_control": true,
+    "display_enumerate": true,
+    "thumbnail": true,
+    "idle_signal": "input|cursor|none",
+    "accessibility": true,
+    "screen_recording": true
+  }
+}
+```
+
+- `window_hide` 是枚举而不是布尔：macOS 只能"整应用隐藏"（`app`），Windows 可以单窗口（`window`），Wayland 多半是 `false`
+- 写操作在不支持时返回 `unsupported_on_platform` / `permission_required`（macOS TCC）/ `compositor_unsupported`（Wayland 合成器未实现）
+- 详见 `docs/platforms.md` 的能力矩阵
 ## 5. 状态（每次工具调用都带一次）
 
 ```jsonc
@@ -118,7 +140,7 @@ focus    (holder: agent_id, until)                   —— 全局唯一
 `mode_off` · `display_not_managed` · `spans_displays` · `display_borrowed` · `display_lost` ·
 `no_free_region` · `window_owned_by` · `focus_denied` · `quota_exceeded` ·
 `owned_by_other` · `protected` · `user_active` · `close_blocked` · `restart_partial` ·
-`needs_user_consent` · `uipi_denied` · `app_refuses_resize` · `stale_lease` · `unmanaged_kill`
+`needs_user_consent` · `uipi_denied` · `app_refuses_resize` · `stale_lease` · `unmanaged_kill` · `unsupported_on_platform` · `permission_required` · `compositor_unsupported`
 
 ## 7. 仲裁规则
 

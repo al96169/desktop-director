@@ -26,6 +26,7 @@
 | D19 | **用户活跃信号 = 光标位移 >25px 或前台窗口变化**，`input_age_s` 只作原始值照实报告 | 本机有鼠标抖动/注入（Bloody6 类常驻工具），`GetLastInputInfo` 长期为 0，单用它会让"空闲判断"永远失真 | 判定结果写进 `user_active`；`claim/move` 遇 `user_active` 可 `--force`；后续可加键盘专用信号 |
 | D20 | **`hide`/`close` 都要求先 `own`**；`close` 只发 `WM_CLOSE` 等 3s，失败即 `close_blocked`，不重试不强杀 | 关闭是唯一会丢数据的动作，必须挂在"负责人"语义上；也顺手把 M2.5 的闸门做进参考实现 | `not_owned` / `owned_by_other` 直接拒绝；`release` 同时还原隐藏与位置 |
 | D21 | **Trae 用户规则需重启才加载**（实测：重启前未进 system prompt，重启后逐字复述成功）；仓库根 `AGENTS.md` 保留为项目级兜底 | 只改文件不重启会静默不生效，最容易误判"已验证" | 跨 Harness 验收一律要求对方**复述规则原文**，不看行为（行为可能来自任务提示）；Trae 侧改动后必须重启 |
+| D22 | **窗口租约必须排他（I1），参考实现已落地**：item 级 gent/ts/expires（TTL 300s），claim 跳过别人持有的窗口，撞上则返回 window_owned_by；elease 只释放自己的 | 实测两个 Agent 抢同一窗口时双双成功、rom 被覆盖、B 释放了 A 的租约——不排他的话整套语义都是假的 | 同 Agent 重复 claim 视为续租；租约过期自动可抢；跨 Agent 的抢占留给 M5 的优先级矩阵 |
 
 ## 待观察（还没定，先记着）
 

@@ -59,7 +59,7 @@
 | M2.5 | auto 处决：武装倒计时 + `WM_CLOSE` 管道 + `undo-close` | 未开始 |
 | M3 | 托盘三档 | 未开始 |
 | M4 | HUD 装饰层（缩略图墙 / 暗化 / 入场动画） | 未开始 |
-| M5 | 多 Agent 仲裁：`claim/own/close/revoke` + 看板 | 未开始 |
+| M5 | 多 Agent 仲裁：`claim/own/close/revoke` + 看板 | 🔶 骨架：窗口租约排他（I1）+ `window_owned_by` + 看板分组，已用双 Agent 抢屏验证 |
 | M6 | auto × 多 Agent：关闭保护 + `unmanaged_kill` 检测降档 | 未开始 |
 
 > 执行顺序、任务拆分、人日/日历估算与每档 Gate 见 **[docs/plan.md](docs/plan.md)**。

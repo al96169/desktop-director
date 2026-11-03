@@ -302,6 +302,19 @@ function Invoke-Claim([string]$needsSpec, [switch]$DryRun) {
   if ($needList.Count -gt 3) { $needList = $needList[0..2] }
 
   $wins = Get-Windows | Where-Object { $managed.uid -contains $_.display }
+  $state0 = Get-State
+  $now = Get-Date
+  $busy = @{}
+  if ($state0) {
+    foreach ($it in @($state0.items)) {
+      if (-not $it.window) { continue }
+      $exp = $null
+      try { if ($it.expires) { $exp = [datetime]$it.expires } } catch { }
+      $alive = ($null -eq $exp) -or ($exp -gt $now)
+      if ($alive -and $it.agent -and $it.agent -ne $script:Agent) { $busy[$it.window] = $it }
+    }
+  }
+  $blockedHit = $null
   $used = @()
   $assign = @()
   $gap = 16
@@ -315,6 +328,7 @@ function Invoke-Claim([string]$needsSpec, [switch]$DryRun) {
       if ($used -contains $w.hwnd) { continue }
       if ($w.minimized) { continue }
       if ($need.match -and ($w.app -notlike "*$($need.match)*") -and ($w.title -notlike "*$($need.match)*") -and ($w.class -notlike "*$($need.match)*")) { continue }
+      if ($busy.ContainsKey($w.hwnd)) { if (-not $blockedHit) { $blockedHit = $busy[$w.hwnd] }; continue }
       $cand = $w; break
     }
     if (-not $cand) { continue }
@@ -344,13 +358,24 @@ function Invoke-Claim([string]$needsSpec, [switch]$DryRun) {
     }
   }
 
-  if ($assign.Count -eq 0) { return [pscustomobject]@{ ok = $false; error = "no_window"; hint = "没有匹配到托管屏上的窗口；先打开目标软件" } }
+  if ($assign.Count -eq 0) {
+    if ($blockedHit) {
+      $left = 0
+      try { $left = [int]([datetime]$blockedHit.expires - (Get-Date)).TotalSeconds } catch { }
+      return [pscustomobject]@{ ok = $false; error = "window_owned_by"; window = $blockedHit.window
+        owner_agent = $blockedHit.agent; owner_since = $blockedHit.ts; expires_in_s = $left
+        hint = "该窗口正被另一个 Agent 使用；换窗口，或等它 release" }
+    }
+    return [pscustomobject]@{ ok = $false; error = "no_window"; hint = "没有匹配到托管屏上的窗口；先打开目标软件" }
+  }
 
   if (-not $DryRun) {
-    $state = Get-State
+    $state = $state0
     if (-not $state) {
-      $state = [pscustomobject]@{ lease = ("ls_" + [guid]::NewGuid().ToString("N").Substring(0, 6)); agent = $script:Agent; mode = $mode; created = (Get-Date).ToString("o"); items = @() }
+      $state = [pscustomobject]@{ mode = $mode; created = (Get-Date).ToString("o"); items = @() }
     }
+    $leaseId = "ls_" + [guid]::NewGuid().ToString("N").Substring(0, 6)
+    $ttl = 300
     $items = @()
     foreach ($a in $assign) {
       $hv = [Convert]::ToInt64($a.window, 16)
@@ -358,12 +383,13 @@ function Invoke-Claim([string]$needsSpec, [switch]$DryRun) {
       if ([DDIR]::IsZoomed($h)) { [void][DDIR]::ShowWindow($h, [DDIR]::SW_RESTORE); Start-Sleep -Milliseconds 60 }
       [void][DDIR]::SetWindowPos($h, [IntPtr]::Zero, $a.rect[0], $a.rect[1], $a.rect[2], $a.rect[3],
         ([DDIR]::SWP_NOZORDER -bor [DDIR]::SWP_NOACTIVATE -bor [DDIR]::SWP_SHOWWINDOW))
-      $items += [pscustomobject]@{ window = $a.window; action = "move"; from = $a.from; to = $a.rect }
+      $items += [pscustomobject]@{ window = $a.window; action = "move"; agent = $script:Agent; lease = $leaseId
+        from = $a.from; to = $a.rect; ts = (Get-Date).ToString("o"); expires = ((Get-Date).AddSeconds($ttl)).ToString("o") }
     }
     $state.items = @($state.items) + $items
     Save-State $state
-    Write-Audit "claim" @{ lease = $state.lease; assign = $assign }
-    return [pscustomobject]@{ ok = $true; lease = $state.lease; mode = $mode; displays_managed = @($managed.uid); assign = $assign; focus = "none" }
+    Write-Audit "claim" @{ lease = $leaseId; assign = $assign }
+    return [pscustomobject]@{ ok = $true; lease = $leaseId; mode = $mode; displays_managed = @($managed.uid); assign = $assign; focus = "none"; ttl_s = $ttl }
   }
   return [pscustomobject]@{ ok = $true; dry_run = $true; mode = $mode; displays_managed = @($managed.uid); assign = $assign; focus = "none" }
 }
@@ -434,12 +460,24 @@ ddir — Desktop Director 参考实现（M1 行为参考 / M0 测试台）
     $state = Get-State
     $apps = Get-Apps
     $a = Get-Activity
-    $hide = 0
-    if ($state) { $hide = @($state.items | Where-Object { $_.action -eq "hide" }).Count }
+    $mine = @()
+    $others = @()
+    if ($state) {
+      $nowS = Get-Date
+      foreach ($it in @($state.items)) {
+        $exp = $null
+        try { if ($it.expires) { $exp = [datetime]$it.expires } } catch { }
+        if ($exp -and $exp -le $nowS) { continue }
+        if (-not $it.agent -or $it.agent -eq $script:Agent) { $mine += $it } else { $others += $it }
+      }
+    }
+    $hide = @($mine | Where-Object { $_.action -eq "hide" }).Count
     $o = [pscustomobject]@{
       ok = $true; mode = (Get-Mode); you = $script:Agent
-      leases = $(if ($state) { 1 } else { 0 })
-      lease = $(if ($state) { $state.lease } else { $null })
+      leases = $mine.Count
+      lease = $(if ($mine.Count -gt 0) { $mine[0].lease } else { $null })
+      windows = @($mine | ForEach-Object { [pscustomobject]@{ window = $_.window; action = $_.action; expires = $_.expires } })
+      held_by_others = $others.Count
       owns = @($apps.PSObject.Properties | Where-Object { $_.Value.owner -eq $script:Agent } | ForEach-Object { $_.Name })
       hidden_by_you = $hide
       focus_holder = "none"
@@ -498,17 +536,19 @@ ddir — Desktop Director 参考实现（M1 行为参考 / M0 测试台）
   "release" {
     $state = Get-State
     if (-not $state) { Write-Json ([pscustomobject]@{ ok = $true; released = 0 }); break }
+    $mine = @($state.items | Where-Object { -not $_.agent -or $_.agent -eq $script:Agent })
+    $others = @($state.items | Where-Object { $_.agent -and $_.agent -ne $script:Agent })
     $n = 0
-    foreach ($it in @($state.items)) {
+    foreach ($it in $mine) {
       $h = [IntPtr][Convert]::ToInt64($it.window, 16)
       if ($it.action -eq "hide") { [void][DDIR]::ShowWindow($h, 4); $n++; continue }
       [void][DDIR]::SetWindowPos($h, [IntPtr]::Zero, $it.from[0], $it.from[1], $it.from[2], $it.from[3],
         ([DDIR]::SWP_NOZORDER -bor [DDIR]::SWP_NOACTIVATE -bor [DDIR]::SWP_SHOWWINDOW))
       $n++
     }
-    Remove-Item $StateFile -ErrorAction SilentlyContinue
-    Write-Audit "release" @{ restored = $n }
-    Write-Json ([pscustomobject]@{ ok = $true; released = $n })
+    if ($others.Count -gt 0) { $state.items = $others; Save-State $state } else { Remove-Item $StateFile -ErrorAction SilentlyContinue }
+    Write-Audit "release" @{ restored = $n; mine = $mine.Count; kept_others = $others.Count }
+    Write-Json ([pscustomobject]@{ ok = $true; released = $n; other_leases_kept = $others.Count })
     break
   }
   "own" {
@@ -592,7 +632,10 @@ ddir — Desktop Director 参考实现（M1 行为参考 / M0 测试台）
     $act = Get-Activity
     "== ddir mode $mode   焦点 none   input_age=$($act.input_age_s)s  user_active=$($act.user_active)  cursor_moved=$($act.cursor_moved_px)px"
     "== 窗口 $(@(Get-Windows).Count) 个（托管屏 $((Get-ManagedDisplays | ForEach-Object { $_.uid }) -join ',')）"
-    if ($state) { "== lease $($state.lease) by $($state.agent)，持有 $($state.items.Count) 个窗口" } else { "== 无租约" }
+    if ($state) {
+      $groups = @($state.items | Group-Object agent)
+      foreach ($g in $groups) { "== lease $($g.Name)：$(($g.Group | ForEach-Object { $_.window }) -join ', ')" }
+    } else { "== 无租约" }
     foreach ($p in $apps.PSObject.Properties) { "== owned: $($p.Value.app) -> $($p.Value.owner)" }
     break
   }

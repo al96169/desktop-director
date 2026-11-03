@@ -70,6 +70,32 @@ Trae CN 的会话无法脚本驱动，规则装进 `~/.trae-cn/user_rules/` 后�
 | `--rect` 不加引号失败 | PowerShell 逗号拆参 | 参考实现兼容不带引号；提示词要求加引号 |
 | 没有关闭/隐藏能力 | 只做了只读 + 移动 | `hide/show`（需先 `own`）、`close`（仅自己 own 过、`WM_CLOSE`、3s、`close_blocked`） |
 
+## T5：两个 Agent 抢同一个窗口（M5 骨架，2026-11-03 22:50）
+
+**首次运行 —— 失败，暴露 I1 未实现**：
+
+| 步骤 | 结果 |
+|---|---|
+| A `claim` 记事本 | ✅ 成功，记录 `from=[100,100,900,700]` |
+| B 紧接着 `claim` **同一个 hwnd** | ❌ **也成功**（同一 lease id）→ I1 单写者被违反 |
+| B 记录的 `from` | `[16,16,1888,1018]`（A 摆完后的位置）→ 用户原位丢失 |
+| B `release` | `released=2`，**释放了 A 的租约** |
+| A `release` | `released=0` |
+
+**修法**（参考实现）：窗口租约改成 items 级，带 `agent` / `ts` / `expires`（TTL 300s）；claim 时先扫活跃 item，别人持有的窗口直接跳过；无候选且撞到别人的窗口 → 返回 `window_owned_by`（含 `owner_agent` / `owner_since` / `expires_in_s`）；`release` 只释放自己的，别人的保留。
+
+**复测 —— 通过**：
+
+| 步骤 | 结果 |
+|---|---|
+| A `claim` | ✅ `lease=ls_f2f05c`，窗口就位 |
+| B `claim` 同一窗口 | ✅ 正确拒绝：`{error:"window_owned_by", owner_agent:"agent-A", expires_in_s:298}` |
+| B 尝试后窗口位置 | 未变化（B 一个像素都没动） |
+| B `status` | `leases=0`，`held_by_others=1` |
+| A `release` | `released=1`，窗口还原 |
+
+**附带发现**：当屏幕上有**两个**同类窗口时，B 会自动退到另一个空窗口而不是报错——这个"候选回退"行为是正确的（比直接失败更实用），已在 T5 的第一次运行中观察到。
+
 ## Gate G0 判定（更新：已完成）
 
 | 条件 | 结果 |

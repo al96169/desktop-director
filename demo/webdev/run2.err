@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "F:\desktop-director\demo\webdev\run.py", line 605, in <module>
+    sys.exit(main())
+  File "F:\desktop-director\demo\webdev\run.py", line 597, in main
+    run(args.fast, args.keep)
+  File "F:\desktop-director\demo\webdev\run.py", line 483, in run
+    term = open_terminal()
+  File "F:\desktop-director\demo\webdev\run.py", line 259, in open_terminal
+    log("create-vite failed: " + (r.stderr or r.stdout or "")[:400])
+  File "F:\desktop-director\demo\webdev\run.py", line 48, in log
+    print(line, flush=True)
+UnicodeEncodeError: 'gbk' codec can't encode character '\ufffd' in position 99: illegal multibyte sequence

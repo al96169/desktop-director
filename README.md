@@ -54,8 +54,17 @@ target\release\ddir.exe selftest
 |---|---|---|---|
 | `auto_close` | `off` / `minimize` / `close` | **off** | auto 档是否动软件窗口：永不关 / 最小化代替关闭 / 允许 `WM_CLOSE` |
 | `countdown_seconds` | 0–300 | 10 | `ddir auto on` 的武装倒计时 |
+| `presentation` | `instant` / `paced` | **instant** | 操作后立刻上屏（机器速度）/ 入队按节拍上屏（人看得清） |
+| `step_ms` | 50–5000 | 400 | `paced` 时每个动作的间隔 |
 
 日志 `~/.ddir/ddir.log`：每条命令一行（时间 + 动作），`ddir log --lines 40` 查看，托盘右键「查看日志」也能打开。超过 2MB 自动轮转成 `ddir.log.1`。
+## 演示（paced）与操作/演示分离
+
+- 默认 `presentation=instant`：`claim` 同步摆好窗口，Agent 拿到确定性结果
+- `presentation=paced`（或 `claim --present paced`）：几何**立刻算好、租约立刻生效**，但改动进入展示队列，按 `step_ms` 一个个上屏；`claim` 返回 `pending: N`
+- `ddir flush`：立即把队列清空（需要确定性时用）
+- `ddir demo`：自动开 3 个演示窗口 → 逐个 claim（带节拍）→ 3 秒后自动还原并关闭，演示完不留痕
+- 托盘每 150ms 顺带消费队列，所以 paced 下即使没有 `flush` 也会自己播完
 ## 三档模式
 
 | 档位 | 屏幕 | 窗口 | 软件 |

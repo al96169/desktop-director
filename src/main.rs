@@ -1,6 +1,7 @@
 ﻿//! ddir - Desktop Director (Windows backend, v0.1)
 //! Lease-based window / software orchestration for AI agents.
 
+mod present;
 mod store;
 mod tray;
 mod win;
@@ -385,8 +386,20 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
         }
         all.push(l.clone());
     }
+    let paced = match arg(args, "--present") {
+        Some(v) => v == "paced",
+        None => present::presentation() == "paced",
+    };
+    let pending = if paced {
+        let ops: Vec<(isize, [i32; 4])> = plan.iter().map(|(w, r, _, _)| (w.hwnd, *r)).collect();
+        present::enqueue(&ops)
+    } else {
+        0
+    };
     for (w, r, l, f) in &plan {
-        win::set_rect(w.hwnd, *r);
+        if !paced {
+            win::set_rect(w.hwnd, *r);
+        }
         if l.is_none() {
             all.push(store::Lease {
                 window: w.hex.clone(),
@@ -404,8 +417,9 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
     store::audit("claim", &format!("lease={} windows={} retiled={}", lease_id, plan.len(), retiled));
     store::log(&format!("claim lease={} windows={} retiled={}", lease_id, plan.len(), retiled));
     println!(
-        "{{\"ok\":true,\"lease\":\"{}\",\"mode\":\"{}\",\"displays_managed\":[{}],\"assign\":[{}],\"retiled\":{},\"focus\":\"none\",\"ttl_s\":{}}}",
-        lease_id, esc(&mode), managed_uid_json, assign_json.join(","), retiled, LEASE_TTL
+        "{{\"ok\":true,\"lease\":\"{}\",\"mode\":\"{}\",\"displays_managed\":[{}],\"assign\":[{}],\"retiled\":{},\"focus\":\"none\",\"ttl_s\":{},\"presentation\":\"{}\",\"pending\":{}}}",
+        lease_id, esc(&mode), managed_uid_json, assign_json.join(","), retiled, LEASE_TTL,
+        if paced { "paced" } else { "instant" }, pending
     );
     0
 }
@@ -899,6 +913,74 @@ fn cmd_log(args: &[String]) -> i32 {
     }
     0
 }
+fn cmd_flush() -> i32 {
+    let queued = present::pending();
+    let applied = present::drain(30_000);
+    println!("{{\"ok\":true,\"queued\":{},\"applied\":{},\"pending\":{}}}", queued, applied, present::pending());
+    0
+}
+
+fn cmd_demo(args: &[String]) -> i32 {
+    let dir = std::path::PathBuf::from(r"F:\desktop-director\demo");
+    let _ = std::fs::create_dir_all(&dir);
+    let files = [("a.txt", "alpha\nbeta\ngamma\n"), ("b.txt", "one\ntwo\nthree\n"), ("c.txt", "red\ngreen\nblue\n")];
+    for (name, body) in files.iter() {
+        let _ = std::fs::write(dir.join(name), body);
+    }
+    if store::mode() == "off" {
+        let _ = store::set_mode("semi");
+        store::log("demo: mode off -> semi");
+    }
+    // make sure the demo never closes anything
+    let saved_ac = store::config_get("auto_close");
+    let _ = store::config_set("auto_close", "off");
+    let _ = store::config_set("presentation", "paced");
+    println!("== ddir demo   （节拍 {} ms，演示完自动还原）", present::step_ms());
+    let before: Vec<isize> = win::list_windows().iter().filter(|w| w.app == "notepad").map(|w| w.hwnd).collect();
+    for (name, _) in files.iter() {
+        let path = dir.join(name);
+        let _ = std::process::Command::new("notepad.exe").arg(&path).spawn();
+        std::thread::sleep(std::time::Duration::from_millis(700));
+    }
+    std::thread::sleep(std::time::Duration::from_millis(600));
+    let opened: Vec<isize> = win::list_windows()
+        .iter()
+        .filter(|w| w.app == "notepad" && !before.contains(&w.hwnd))
+        .map(|w| w.hwnd)
+        .collect();
+    println!("== 打开 {} 个演示窗口，开始逐个 claim（每个窗口间隔 {}ms）", opened.len(), present::step_ms());
+    let mut lease = String::new();
+    for name in ["a.txt", "b.txt", "c.txt"] {
+        let out = std::process::Command::new(std::env::current_exe().unwrap_or_default())
+            .args(["claim", "--needs", name, "--force", "--present", "paced"])
+            .output();
+        if let Ok(o) = out {
+            let s = String::from_utf8_lossy(&o.stdout).to_string();
+            let short: String = s.chars().take(160).collect();
+            println!("   claim {} -> {}", name, short.trim());
+            if let Some(v) = s.split("\"lease\":\"").nth(1) {
+                lease = v.split('"').next().unwrap_or("").to_string();
+            }
+        }
+        let _ = present::drain(10_000);
+        std::thread::sleep(std::time::Duration::from_millis(400));
+    }
+    println!("== 布局完成（lease {}），3 秒后收队", lease);
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    let (n, _) = release_all();
+    println!("== 已还原 {} 个窗口", n);
+    std::thread::sleep(std::time::Duration::from_millis(800));
+    // close only the windows this demo opened
+    for h in &opened {
+        win::close_graceful(*h);
+    }
+    if let Some(v) = saved_ac {
+        let _ = store::config_set("auto_close", &v);
+    }
+    store::log("demo: finished");
+    println!("{{\"ok\":true,\"opened\":{},\"restored\":{}}}", opened.len(), n);
+    0
+}
 fn cmd_board() -> i32 {
     let me = win::agent_id();
     let now = store::now_unix();
@@ -993,6 +1075,8 @@ fn main() {
         "autostart" => cmd_autostart(rest),
         "auto" => cmd_auto(rest),
         "config" => cmd_config(rest),
+        "flush" => cmd_flush(),
+        "demo" => cmd_demo(rest),
         "log" | "logs" => cmd_log(rest),
         "version" | "--version" | "-V" => {
             println!("ddir {} (windows)", VERSION);

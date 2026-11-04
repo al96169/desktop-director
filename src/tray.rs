@@ -315,6 +315,7 @@ extern "system" fn wnd_proc(hwnd: Hwnd, msg: u32, wp: usize, lp: isize) -> isize
                 0
             }
             WM_TIMER => {
+                crate::present::tick();
                 let mut probe: NotifyIconDataW = std::mem::zeroed();
                 probe.cb_size = std::mem::size_of::<NotifyIconDataW>() as u32;
                 probe.hwnd = hwnd;

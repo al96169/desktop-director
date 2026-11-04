@@ -120,6 +120,8 @@ const WS_EX_TOOLWINDOW: isize = 0x0000_0080;
 const GA_ROOTOWNER: u32 = 3;
 const DWMWA_CLOAKED: u32 = 14;
 const DWMWA_EXTENDED_FRAME_BOUNDS: u32 = 9;
+const SWP_NOMOVE: u32 = 0x0002;
+const SWP_NOSIZE: u32 = 0x0001;
 const SWP_NOZORDER: u32 = 0x0004;
 const SWP_NOACTIVATE: u32 = 0x0010;
 const SWP_SHOWWINDOW: u32 = 0x0040;
@@ -422,6 +424,13 @@ pub fn set_rect(hwnd: Hwnd, xywh: [i32; 4]) -> bool {
             xywh[3],
             SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW,
         ) != 0
+    }
+}
+
+/// Bring the window to the top of the normal z-order without stealing focus.
+pub fn raise_noactivate(hwnd: Hwnd) {
+    unsafe {
+        SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
 }
 

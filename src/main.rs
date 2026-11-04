@@ -933,37 +933,36 @@ fn cmd_demo(args: &[String]) -> i32 {
     }
     // make sure the demo never closes anything
     let saved_ac = store::config_get("auto_close");
+    let saved_pres = store::config_get("presentation");
     let _ = store::config_set("auto_close", "off");
     let _ = store::config_set("presentation", "paced");
     println!("== ddir demo   （节拍 {} ms，演示完自动还原）", present::step_ms());
-    let before: Vec<isize> = win::list_windows().iter().filter(|w| w.app == "notepad").map(|w| w.hwnd).collect();
-    for (name, _) in files.iter() {
-        let path = dir.join(name);
-        let _ = std::process::Command::new("notepad.exe").arg(&path).spawn();
-        std::thread::sleep(std::time::Duration::from_millis(700));
-    }
-    std::thread::sleep(std::time::Duration::from_millis(600));
-    let opened: Vec<isize> = win::list_windows()
-        .iter()
-        .filter(|w| w.app == "notepad" && !before.contains(&w.hwnd))
-        .map(|w| w.hwnd)
-        .collect();
-    println!("== 打开 {} 个演示窗口，开始逐个 claim（每个窗口间隔 {}ms）", opened.len(), present::step_ms());
+    // open one window, then claim it, then the next: the tiling grows 1 -> 2 -> 3 in front of you
+    let mut opened: Vec<isize> = Vec::new();
     let mut lease = String::new();
-    for name in ["a.txt", "b.txt", "c.txt"] {
+    for (i, (name, _)) in files.iter().enumerate() {
+        let path = dir.join(name);
+        let before: Vec<isize> = win::list_windows().iter().filter(|w| w.app == "notepad").map(|w| w.hwnd).collect();
+        let _ = std::process::Command::new("notepad.exe").arg(&path).spawn();
+        std::thread::sleep(std::time::Duration::from_millis(900));
+        for w in win::list_windows() {
+            if w.app == "notepad" && !before.contains(&w.hwnd) {
+                opened.push(w.hwnd);
+            }
+        }
         let out = std::process::Command::new(std::env::current_exe().unwrap_or_default())
             .args(["claim", "--needs", name, "--force", "--present", "paced"])
             .output();
         if let Ok(o) = out {
             let s = String::from_utf8_lossy(&o.stdout).to_string();
-            let short: String = s.chars().take(160).collect();
-            println!("   claim {} -> {}", name, short.trim());
+            let nwin = s.matches("\"window\":").count();
+            println!("   第 {} 个窗口 {} -> 现在共 {} 列", i + 1, name, nwin);
             if let Some(v) = s.split("\"lease\":\"").nth(1) {
                 lease = v.split('"').next().unwrap_or("").to_string();
             }
         }
         let _ = present::drain(10_000);
-        std::thread::sleep(std::time::Duration::from_millis(400));
+        std::thread::sleep(std::time::Duration::from_millis(700));
     }
     println!("== 布局完成（lease {}），3 秒后收队", lease);
     std::thread::sleep(std::time::Duration::from_secs(3));
@@ -976,6 +975,11 @@ fn cmd_demo(args: &[String]) -> i32 {
     }
     if let Some(v) = saved_ac {
         let _ = store::config_set("auto_close", &v);
+    }
+    if let Some(v) = saved_pres {
+        let _ = store::config_set("presentation", &v);
+    } else {
+        let _ = store::config_set("presentation", "instant");
     }
     store::log("demo: finished");
     println!("{{\"ok\":true,\"opened\":{},\"restored\":{}}}", opened.len(), n);

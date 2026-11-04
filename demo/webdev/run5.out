@@ -1,0 +1,18 @@
+[01:24:42] demo start · work=C:\Users\54705\ddir-webdev-demo · platform=win32
+[01:24:44] create-vite rc=0
+[01:24:57] npm install rc=0
+[01:24:57] window powershell · 管理员: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.e · 0x003A1156
+[01:24:57] terminal: npm create vite … npm install … npm run dev
+[01:25:00] dev server ready
+[01:25:00] tile 2 -> 939px columns
+[01:25:00] installing playwright-core (first run)…
+[01:25:07] tile 2 -> 939px columns
+[01:25:07] writing FeatureBanner.vue (925 bytes) — Vite HMR updates the page live
+[01:25:10] window Code · Visual Studio Code · 0x001B20F0
+[01:25:10] tile 2 -> 939px columns
+[01:25:16] tile 2 -> 939px columns
+[01:25:26] media: 0 native players tiled
+[01:25:32] window explorer · src · 0x0013192C
+[01:25:35] tile 2 -> 939px columns
+[01:25:37] finale
+[01:25:42] rollback: closed 6 windows, mode=off

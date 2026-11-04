@@ -30,7 +30,7 @@ ddir list --text       # 过滤到 Alt-Tab 级的窗口列表
 ddir selftest          # 平台能力自检（7 项）
 ddir tray              # 托盘常驻（右键：模式 / 全部还原 / 窗口列表 / 开机自启）
 ddir autostart on      # 开机自启（注册到 HKCU Run）
-ddir auto on --seconds 30   # auto 武装（倒计时，可 Ctrl+C 取消）
+ddir auto on                # auto 武装（默认 10 秒倒计时；切回 semi/off 即取消）
 ddir auto close --app 记事本 # 只关指定目标；不带 --app 会被拒绝
 ddir auto undo             # 把刚关掉的拉回来
 

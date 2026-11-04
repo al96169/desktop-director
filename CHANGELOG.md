@@ -112,6 +112,16 @@
 - `mac/test.sh` 扩到 32 项：新增 auto 武装/最小化/撤销、焦点令牌、两 Agent 并发抢同一窗口（恰好 1 胜）、过期租约不挡新 claim、托盘菜单接线
 - 已知问题：Windows `src/tray.rs` 的 `release_all()` 同样只释放托盘自身租约，待修
 
+**同一版本号的 Windows 线（main，0.8.0）**：
+
+- **DPI 感知**：启动时设 Per-Monitor V2，混合 DPI 下窗口坐标不再被虚拟化
+- **托盘「屏幕」子菜单**：每块屏一个勾选项，点一下即切换托管（等价 `ddir displays --manage`）；处理 `WM_DISPLAYCHANGE`
+- **`ddir doctor`**：9 项诊断（状态目录/mode/配置/租约/锁/队列/显示/日志/托盘），输出 PASS/WARN/FAIL，有 FAIL 时退出码 1
+- **进程级软件所有权**：`ddir own --pid <PID>`，`close` 同时认应用名和 `pid:<PID>`；两个 Chrome 实例可以各归一个 Agent
+- **`list` 输出 pid**
+- **集成测试** `tests/integration.ps1`：20 项断言（claim 并排/等宽/不重叠、hide 记租约、release 还原、own --pid + close 拒绝未认领、doctor），本机 20/20 通过
+
+
 ## 0.7.3 - 2026-11-04
 
 **macOS 后端落地**（Swift 6 + Accessibility API，`mac/`）：

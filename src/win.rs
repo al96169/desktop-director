@@ -183,6 +183,15 @@ fn wide_to_string(buf: &[u16]) -> String {
     OsString::from_wide(&buf[..end]).to_string_lossy().to_string()
 }
 
+pub unsafe fn set_dpi_awareness() {
+    // PER_MONITOR_AWARE_V2 = -4; harmless if the OS is older
+    #[link(name = "user32")]
+    extern "system" {
+        fn SetProcessDpiAwarenessContext(ctx: isize) -> i32;
+    }
+    SetProcessDpiAwarenessContext(-4);
+}
+
 pub fn exe_name(pid: u32) -> String {
     unsafe {
         let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);

@@ -57,7 +57,7 @@ ddir log --lines 50         # 出问题先看日志
 | claim 返回 `user_active` | 你在动键鼠；等 5 秒或加 `--force` |
 | claim 返回 `window_owned_by` | 别的 Agent 在用；换窗口，别重试 |
 | 窗口没还原 | `ddir release --all`；托盘「全部还原」 |
-| 行为异常 | `ddir log --lines 80`，把最后几行发我 |
+| 行为异常 | 先 `ddir doctor`（9 项体检），再 `ddir log --lines 80` |
 
 ## 7. 回滚
 

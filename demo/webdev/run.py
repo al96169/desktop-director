@@ -28,11 +28,18 @@ import subprocess
 import sys
 import time
 import urllib.request
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 WORK = Path(os.environ.get("DDIR_WEBDEV_DIR", Path.home() / "ddir-webdev-demo"))
-DDIR = os.environ.get("DDIR_BIN", "ddir")
+DDIR = os.environ.get("DDIR_BIN") or shutil.which("ddir") or (str(Path(os.environ["LOCALAPPDATA"]) / "ddir" / "bin" / "ddir.exe") if sys.platform.startswith("win") else "ddir")
 IS_MAC = sys.platform == "darwin"
 IS_WIN = sys.platform.startswith("win")
 PORT = int(os.environ.get("DDIR_WEBDEV_PORT", "5173"))
@@ -41,6 +48,7 @@ BASE = f"http://127.0.0.1:{PORT}"
 opened: list[tuple[str, str]] = []      # (ref, app) windows this demo opened
 owned: set[str] = set()
 pw_proc: subprocess.Popen | None = None
+vite_proc: subprocess.Popen | None = None
 
 
 def log(msg: str) -> None:
@@ -51,10 +59,26 @@ def log(msg: str) -> None:
         fh.write(line + "\n")
 
 
+def _win_argv(cmd: list[str]) -> tuple[list[str] | str, bool]:
+    """Resolve npm/npx/code .cmd shims: cmd.exe can run them, CreateProcess cannot."""
+    exe = (shutil.which(cmd[0]) or shutil.which(cmd[0] + ".cmd")
+           or shutil.which(cmd[0] + ".bat") or shutil.which(cmd[0] + ".exe"))
+    if not exe:
+        return cmd, False
+    if exe.lower().endswith((".cmd", ".bat")):
+        return subprocess.list2cmdline([exe, *cmd[1:]]), True
+    return [exe, *cmd[1:]], False
+
+
 def sh(cmd: list[str], cwd: Path | None = None, timeout: int = 120,
        check: bool = False) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, cwd=str(cwd) if cwd else None, timeout=timeout,
-                          capture_output=True, text=True, check=check)
+    argv: list[str] | str = list(cmd)
+    shell = False
+    if IS_WIN:
+        argv, shell = _win_argv(list(cmd))
+    return subprocess.run(argv, cwd=str(cwd) if cwd else None, timeout=timeout,
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", shell=shell, check=check)
 
 
 def ddir(*args: str, timeout: int = 60) -> dict:
@@ -98,6 +122,23 @@ def wait_new(app: str, before: set[str], timeout: float = 25.0) -> dict | None:
     return None
 
 
+def wait_new_any(apps: list[str], before: set[str], timeout: float = 25.0) -> dict | None:
+    """Wait for a new window whose app matches any of `apps` (case-insensitive)."""
+    deadline = time.time() + timeout
+    names = [a.lower() for a in apps]
+    while time.time() < deadline:
+        for w in windows():
+            if w["app"].lower() in names and w["hwnd"] not in before:
+                return w
+        time.sleep(0.25)
+    return None
+
+
+def is_edge(w: dict) -> bool:
+    """Edge's exe stem is `msedge` on Windows, `Microsoft Edge` on macOS."""
+    return w["app"].lower() in ("microsoft edge", "msedge")
+
+
 def remember(win: dict | None) -> dict | None:
     if win:
         opened.append((win["hwnd"], win["app"]))
@@ -118,6 +159,9 @@ def claim(needs: str) -> dict:
 
 
 def hud(style: str = "toast", seconds: int = 3) -> None:
+    if IS_WIN:
+        # Windows has no HUD yet (caps: unsupported_on_platform) - do not spawn a doomed process
+        return
     args = ["hud", "--seconds", str(seconds)]
     if style == "wall":
         args.insert(1, "--wall")
@@ -127,7 +171,7 @@ def hud(style: str = "toast", seconds: int = 3) -> None:
 def prune_edge(keep: set[str]) -> None:
     """Close Edge windows from earlier takes (untranslated blank pages, old shop-web tabs)."""
     for w in windows():
-        if w["app"].lower() != "microsoft edge" or w["hwnd"] in keep:
+        if not is_edge(w) or w["hwnd"] in keep:
             continue
         if "Nova Store" in w["title"] or "Design references" in w["title"]:
             continue
@@ -162,7 +206,7 @@ def clear_stage() -> None:
         sh(["osascript", "-e", 'tell application "Terminal" to close every window'])
     # close leftover browser windows from a previous take
     for w in windows():
-        if w["app"].lower() == "microsoft edge" and ("Nova Store" in w["title"] or "shop-web" in w["title"]):
+        if is_edge(w) and ("Nova Store" in w["title"] or "shop-web" in w["title"]):
             ensure_owned(w["app"])
             ddir("close", "--window", w["hwnd"])
     # hide everything that is not part of the story
@@ -219,22 +263,59 @@ def open_terminal() -> dict | None:
         # already been asked for automation permission on this machine.
         sh(["osascript", "-e", f'tell application "Terminal" to do script "bash {terminal_script()}"'])
     elif IS_WIN:
-        # Windows: run the same steps in a PowerShell / cmd window
-        ps = WORK / "beat.ps1"
-        ps.write_text(
-            f"$ErrorActionPreference='Stop'\nSet-Location '{WORK}'\n"
-            f"if (Test-Path shop-web) {{ Remove-Item -Recurse -Force shop-web }}\n"
-            f"npm create vite@latest shop-web -- --template vue-ts --no-interactive --no-immediate --overwrite\n"
-            f"Set-Location shop-web\nnpm install --prefer-offline --no-audit --no-fund\n"
-            f"Copy-Item -Recurse -Force '{HERE / 'app'}/*' .\n"
-            f"Remove-Item -Force src/components/HelloWorld.vue -ErrorAction SilentlyContinue\n"
-            f"'READY' | Out-File -Encoding ascii '{WORK / 'ready.txt'}'\n"
-            f"npm run dev -- --host 127.0.0.1 --port {PORT}\n",
-            encoding="utf-8")
-        sh(["cmd", "/c", "start", "powershell", "-NoExit", "-ExecutionPolicy", "Bypass", "-File", str(ps)])
+        # Windows: do the scaffold here (deterministic, no interactive npm prompts), then open a
+        # PowerShell window that only runs the dev server so the viewer still sees a terminal.
+        proj = WORK / "shop-web"
+        if proj.exists():
+            shutil.rmtree(proj, ignore_errors=True)
+        WORK.mkdir(parents=True, exist_ok=True)
+        r = sh(["npm", "exec", "--yes", "create-vite@latest", "shop-web", "--", "--template", "vue-ts", "--no-interactive", "--no-immediate", "--overwrite"],
+               cwd=WORK, timeout=600)
+        log(f"create-vite rc={r.returncode}")
+        log("scaffold files: " + ascii(sorted(os.listdir(proj)) if proj.exists() else []))
+        if not (proj / "package.json").exists():
+            log("scaffold produced no package.json - aborting this step")
+            return None
+        if r.returncode != 0:
+            log("create-vite failed rc=" + str(r.returncode) + " out=" + ascii((r.stdout or "")[-300:]) + " err=" + ascii((r.stderr or "")[-300:]))
+            return None
+        r = sh(["npm", "install", "--no-audit", "--no-fund"], cwd=proj, timeout=900)
+        log(f"npm install rc={r.returncode}")
+        if r.returncode != 0:
+            log("npm install failed rc=" + str(r.returncode) + " out=" + ascii((r.stdout or "")[-300:]) + " err=" + ascii((r.stderr or "")[-300:]))
+            return None
+        app_src = HERE / "app"
+        # robocopy is the most reliable copier on Windows (copytree hits EINVAL on some NTFS setups)
+        rc = sh(["robocopy", str(app_src), str(proj), "/E", "/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS"]).returncode
+        log(f"copy app overlay rc={rc}")
+        if rc > 7:
+            log("copy overlay failed")
+            return None
+        for stale in (proj / "src" / "components" / "HelloWorld.vue", proj / "public" / "vite.svg"):
+            if stale.exists():
+                stale.unlink()
+        (WORK / "ready.txt").write_text("READY\n", encoding="ascii")
+        # run the dev server detached with its output captured, and let the PowerShell window
+        # just tail that log: deterministic, and any failure is visible in vite.log
+        global vite_proc
+        npm_cmd = shutil.which("npm.cmd") or shutil.which("npm") or "npm"
+        vite_log_path = WORK / "vite.log"
+        vite_log = open(vite_log_path, "w", encoding="utf-8", errors="replace")
+        vite_proc = subprocess.Popen(
+            [npm_cmd, "run", "dev", "--", "--host", "127.0.0.1", "--port", str(PORT)],
+            cwd=str(proj), stdout=vite_log, stderr=subprocess.STDOUT,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        ps_cmd = (f"Set-Location -LiteralPath '{proj}'; "
+                  f"Write-Host 'npm run dev -- --host 127.0.0.1 --port {PORT}' -ForegroundColor Cyan; "
+                  f"Get-Content -LiteralPath '{vite_log_path}' -Wait")
+        subprocess.Popen(
+            ["powershell", "-NoExit", "-Command", ps_cmd],
+            creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+        )
     else:
         sh(["x-terminal-emulator", "-e", str(terminal_script())])
-    return remember(wait_new("Terminal" if IS_MAC else "Windows PowerShell", before))
+    return remember(wait_new_any(["Terminal", "Windows PowerShell", "WindowsTerminal", "PowerShell", "conhost", "cmd"], before))
 
 
 def open_vscode(file: Path) -> dict | None:
@@ -258,9 +339,19 @@ def open_images(paths: list[Path]) -> dict | None:
     if IS_MAC:
         sh(["open", "-a", "Preview", *[str(p) for p in paths]])
         return remember(wait_new("Preview", before))
+    # Windows: the default viewer is the Photos app (one window per file)
     for p in paths:
         os.startfile(str(p))  # type: ignore[attr-defined]
-    time.sleep(2.0)
+        time.sleep(1.2)
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        fresh = [w for w in windows()
+                 if w["hwnd"] not in before
+                 and (any(p.name.lower() in w["title"].lower() for p in paths)
+                      or w["app"].lower() in ("photos", "microsoft.photos", "photosapp"))]
+        if fresh:
+            return remember(fresh[0])
+        time.sleep(0.25)
     return None
 
 
@@ -274,16 +365,39 @@ def edge_profile() -> Path:
     return prof
 
 
+def edge_exe() -> str:
+    for cand in (r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                 r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"):
+        if Path(cand).exists():
+            return cand
+    return "msedge"
+
+
 def open_media(path: Path) -> dict | None:
-    """Open a file in a native player window (AVFoundation on macOS; the OS default player on Windows)."""
+    """Open a file in a player window.
+
+    macOS uses `ddir play` (native AVFoundation window). Windows has no `ddir play`, so we
+    shell-open the file and, if no native player shows up (no default handler, or a UWP app
+    that never creates a normal window), fall back to an Edge window playing the same file.
+    """
     before = {w["hwnd"] for w in windows()}
     if IS_MAC:
         subprocess.Popen([DDIR, "play", str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(1.6)
         return remember(wait_new("Ddir", before, timeout=8))
     if IS_WIN:
-        os.startfile(str(path))  # type: ignore[attr-defined]
-        time.sleep(2.0)
+        # Go straight to an Edge window: shell-opening an unassociated .mp4/.m4a pops the
+        # "How do you want to open this file?" picker, which would sit in the middle of the demo.
+        sh([edge_exe(), "--new-window", "--autoplay-policy=no-user-gesture-required",
+            path.resolve().as_uri()])
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            fresh = [w for w in windows()
+                     if w["hwnd"] not in before and is_edge(w)
+                     and path.name.lower() in w["title"].lower()]
+            if fresh:
+                return remember(fresh[0])
+            time.sleep(0.3)
         return None
     subprocess.Popen(["xdg-open", str(path)])
     time.sleep(2.0)
@@ -299,7 +413,8 @@ def open_playwright(urls: list[str], stay: int = 180) -> subprocess.Popen | None
     env = dict(os.environ, PW_PROFILE=str(edge_profile()))
     pw_proc = subprocess.Popen(["node", "open.js", json.dumps(urls), str(stay)],
                                cwd=str(pw), env=env,
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               text=True, encoding="utf-8", errors="replace")
     return pw_proc
 
 
@@ -357,7 +472,7 @@ def key(combo: str) -> None:
 # ---------------------------------------------------------------- rollback
 
 def rollback(keep: bool = False) -> None:
-    global pw_proc
+    global pw_proc, vite_proc
     if keep:
         log("--keep: leaving the stage up")
         return
@@ -368,6 +483,13 @@ def rollback(keep: bool = False) -> None:
         except Exception:
             pass
         pw_proc = None
+    if vite_proc:
+        try:
+            vite_proc.terminate()
+            vite_proc.wait(timeout=10)
+        except Exception:
+            pass
+        vite_proc = None
     # stop the dev server first: closing a terminal that still runs a process prompts on macOS
     if IS_MAC:
         sh(["pkill", "-f", "beat.sh"])
@@ -442,7 +564,7 @@ def run(fast: bool, keep: bool) -> None:
         log("project was not created — check the terminal")
         return
     log("dev server ready")
-    term_refs = refs_of("Terminal")
+    term_refs = refs_of("Terminal") or refs_of("powershell") or refs_of("WindowsTerminal")
     tile(term_refs)
     hud("toast", 3)
     sleep(2)
@@ -451,7 +573,7 @@ def run(fast: bool, keep: bool) -> None:
     open_playwright([f"{BASE}/#home"], stay=600)
     time.sleep(4)
     edge = [w["hwnd"] for w in windows()
-            if w["app"].lower() == "microsoft edge" and "Nova Store" in w["title"]]
+            if is_edge(w) and "Nova Store" in w["title"]]
     for ref in edge:
         opened.append((ref, "Microsoft Edge"))
     tile(term_refs[:1] + edge[:1])
@@ -478,7 +600,7 @@ def run(fast: bool, keep: bool) -> None:
     open_playwright([f"{BASE}/#products", f"{BASE}/#about"], stay=600)
     time.sleep(4)
     edge = [w["hwnd"] for w in windows()
-            if w["app"].lower() == "microsoft edge" and "Nova Store" in w["title"]]
+            if is_edge(w) and "Nova Store" in w["title"]]
     for ref in edge:
         if (ref, "Microsoft Edge") not in opened:
             opened.append((ref, "Microsoft Edge"))
@@ -516,7 +638,7 @@ def run(fast: bool, keep: bool) -> None:
     open_playwright([f"{BASE}/design-refs.html"], stay=600)
     time.sleep(3)
     design = [w["hwnd"] for w in windows()
-              if w["app"].lower() == "microsoft edge" and "Design references" in w["title"]]
+              if is_edge(w) and "Design references" in w["title"]]
     for ref in design:
         if (ref, "Microsoft Edge") not in opened:
             opened.append((ref, "Microsoft Edge"))

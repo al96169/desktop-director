@@ -1,5 +1,12 @@
 ﻿# Changelog
 
+## 0.7.2 - 2026-11-04
+
+- 提示词 v1.7：去掉硬编码路径，补齐 heartbeat / priority / focus / config / log / displays --manage / flush / demo / tray
+- `prompts/AGENTS.ddir.md` 改成"设计说明"，规则以 `AGENTS.m0.md` 为唯一真源（避免两份规则漂移）
+- 明确 `hide` 会记租约、`release` 恢复；明确 `claim` 会跨屏把窗口拉到托管屏
+- 与代码同步的检查清单写进 AGENTS.ddir.md
+
 ## 0.7.1 - 2026-11-04
 
 修复 Agent 反馈的 7 个问题：

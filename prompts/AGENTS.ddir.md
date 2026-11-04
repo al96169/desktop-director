@@ -1,81 +1,37 @@
-﻿# AGENTS.ddir — Desktop Director 提示词包（M0）
+# AGENTS.ddir — 提示词包说明（规则真源是 AGENTS.m0.md）
 
-> 用法：把下面 `---` 之间的内容整段贴进全局指令（`~/.dsh/AGENTS.md`、`CLAUDE.md`、`AGENTS.md` 等）。
-> 设计原则：**写死禁止项 > 写细应该做**；每条规则都要能用一条命令验证。
-> 版本：v1（2026-11-03）
+> 这份文件只解释"为什么这么写"，**规则本身以 `prompts/AGENTS.m0.md` 为唯一真源**。
+> 安装时贴 `AGENTS.m0.md`，不要贴这份。版本 v1.7（2026-11-04）。
 
----
+## 为什么把规则写成现在这样
 
-## 窗口编排（仅当本机有 `ddir` 时生效）
-
-本机可能装了 Desktop Director（命令 `ddir`）。**先执行 `ddir mode`**：
-
-- 命令不存在或返回 `off` → 跳过本节，按平时方式干活。
-- 返回 `semi` / `auto` → 按下面的规矩管理窗口。
-
-### 一、先搞清楚边界
-
-```
-ddir mode        # 档位：off / semi / auto
-ddir displays    # managed=true 的屏才归你；owner=user 的屏一个像素都不要碰
-ddir status      # 当前租约、你负责的软件、焦点在谁手上、用户是否在动
-```
-
-### 二、开始任务时（semi / auto 都做）
-
-1. `ddir claim` 一次，说明这一步需要哪 1–3 个窗口、各自最小尺寸、谁是主谁是参考。
-2. 只摆"这一步需要的窗口"。semi 下其余隐藏；auto 下可交给 `ddir close`。
-3. 主工作窗口占可用区 60–70%，参考窗口 30–40%，中间留 16–24px 缝。
-4. 终端用"列×行"表达：约 120 列 × 32 行；IDE 至少 1200×800。
-5. 一次只改一个窗口的几何，改完 `ddir status` 确认，再改下一个。
-6. 跨屏摆放不算"更大"，算越界。窗口横跨两屏会被拒绝（`spans_displays`）。
-
-### 三、用软件时（防止被别的 Agent 关掉）
-
-```
-ddir own --app "Code"      # 开始用之前认领
-ddir disown --app "Code"   # 干完还回去
-```
-
-- `ddir own` 返回 `owned_by_other` → 别的 Agent 正在用，换实例或换方案，**不要重试**。
-- 关闭软件**只能**通过 `ddir close`（会被审核，可能被拒绝）。**永远不要** `taskkill` / `Stop-Process` / `kill`——绕过会被记 `unmanaged_kill` 并自动把你的档位降到 semi。
-
-### 四、严禁
-
-- 直接杀进程、切换虚拟桌面、进入独占全屏
-- 移动提权（管理员）窗口
-- 在用户屏上摆任何东西，或把窗口从托管屏挪到用户屏
-- 用模拟滚轮/键盘去"滚动内容"——滚动用你自己的工具（UIA / 浏览器 / 终端控制）
-- 用户动过键鼠后 5 秒内移动任何窗口
-
-### 五、判断"要不要给用户看"
-
-- 用户明确要看结果（截图、对比、渲染、网页）→ 必须露出来，且给足面积。
-- 中间态（编译日志、扫描进度）→ 只在失败时露出来。
-- 不确定 → 不露出，在回答里给一句话摘要 + "要看的话我可以打开"。
-
-### 六、结束任务
-
-```
-ddir release --all     # 窗口回到租约前的位置（除非用户说"保持这样"）
-```
-
----
-
-## 附：错误码速查（模型自我修正用）
-
-| 码 | 含义 | 该怎么做 |
+| 规则 | 为什么 | 代码里对应的行为 |
 |---|---|---|
-| `mode_off` | 档位不允许 | 别管窗口，继续干活 |
-| `display_not_managed` | 目标在用户屏上 | 换到托管屏，或放弃 |
-| `spans_displays` | 窗口横跨两屏 | `ddir move --to <display_uid>` 先规范化 |
-| `display_borrowed` | 用户临时占用了托管屏 | 让位，别抢 |
-| `no_free_region` | 排不下 | 降低最小尺寸或减少窗口数 |
-| `window_owned_by` | 窗口被别的 lease 占用 | 换窗口，或提高 priority 重试一次 |
-| `focus_denied` | 焦点令牌在别人手上 | 别抢，用不激活的方式展示 |
-| `owned_by_other` | 软件归别的 Agent | 换实例 / 换方案，别重试 |
-| `protected` | 钉住 / 保护清单 / 提权 | 放弃，告知用户 |
-| `user_active` | 用户正在用 | 等空闲，或只隐藏 |
-| `close_blocked` | 有未保存内容 | 不要重试，告知用户 |
-| `quota_exceeded` | 超过 3 窗口 / 3 软件 / 1 焦点 | 先 release 不用的 |
-| `stale_lease` | 租约过期 | 重新 claim |
+| 先跑 `ddir mode`，`off` 就整节跳过 | 没装/关掉时提示词必须无副作用 | `move`/`hide`/`close`/`claim` 在 off 档统一返回 `mode_off` |
+| 一次 claim 说全 1–3 个窗口 | 每次 claim 都会重排**本 Agent 已持有的窗口**，分批 claim 会让旧窗口反复移动 | `claim` 返回 `assign[].retiled`，超过 3 个返回 `quota_exceeded` |
+| 并排、不叠放 | 用户实测反馈：新窗口压住旧窗口，内容被遮 | 等宽列布局（1=满宽 / 2=各半 / 3=各 1/3，间隔 16px） |
+| 新窗口落在主屏也要能摆 | 新开的软件默认落在主屏，而 semi 只托管副屏 | `claim` 跨屏匹配窗口并拉到托管屏；`release` 放回原位 |
+| `hide` 而不是关掉 | 关闭是唯一会丢数据的动作 | `hide` 记 `action=hide` 租约；`release` 恢复显示 |
+| 关闭必须先 `own` + 只发 `WM_CLOSE` | 未保存内容检测只能靠"关不掉"来发现 | `close` 等 3 秒 → `close_blocked`，不重试不强杀 |
+| 永远不要 taskkill | 同权限下拦不住，只能事后发现 | 托盘每 3 秒比对窗口集合 → `unmanaged_kill` 审计 |
+| 长任务每 2 分钟 heartbeat | 租约 TTL 300 秒，长任务中途会被别人抢 | `ddir heartbeat` 续期租约与软件认领 |
+| `--priority high` 只能重试一次 | 抢占条件严格（对方 >60s 且窗口不在前台），循环重试只会互相抖 | 抢占写 `preempt` 审计，返回 `preempted` |
+| 焦点令牌 | z-order/前台只有一个，不能靠抢 | `ddir focus` 120s，冲突返回 `focus_denied` |
+| auto 默认不关窗口 | 关软件是最高风险动作，默认必须安全 | `auto_close=off`；`close` 返回 `auto_close_disabled` |
+| 出问题看日志 | Agent 无法把日志推给用户 | `~/.ddir/ddir.log`，`ddir log --lines N` |
+
+## 与代码同步的检查清单
+
+改行为时，这三处必须一起改：
+
+1. `prompts/AGENTS.m0.md`（Agent 看的规则）
+2. `ddir help` 的命令说明
+3. `README.md` 的对应章节
+
+`ddir selftest` 只验证平台能力，不验证提示词与实现一致——一致性靠 review。
+
+## 安装位置
+
+- 全局指令：各 Harness 的 `AGENTS.md` / `CLAUDE.md` / 用户规则（内容 = `AGENTS.m0.md`）
+- 项目级兜底：仓库根 `AGENTS.md`
+- 测试环境：独立 `DSH_HOME`（见 `docs/m0-observations.md`）

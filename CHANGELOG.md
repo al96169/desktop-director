@@ -1,5 +1,18 @@
 ﻿# Changelog
 
+## 0.11.1 - 2026-11-04
+
+**演出改用真实素材**（去网上找，不再全靠本机合成）：
+
+- `ddir stage fetch [--force]`：下载 **NASA/STScI JWST 船底座星云**、**Hubble 螺旋星系**
+  （公有领域）与 **CC0 太空环境音乐**（yd / OpenGameArt），缓存到 `~/.ddir/show/media/`，
+  写 `sources.json` 记录标题/作者/许可/来源 URL
+- 静态星图 → **12 秒竖屏 Ken Burns 片段**（540×960、H.264、推镜 + 平移 + 柔边暗角），
+  三列平铺满屏无黑边；暗角修复：不要用 `drawsAfterEndLocation`（会画出硬边圆）
+- 音乐改为 46 秒循环（`loop-score.sh` 包装 `afplay`，回滚杀包装进程），离线时自动退回合成音
+- 无网络/未 fetch 时 `stage` 自动退回本机生成素材，演出不会断
+- 素材许可见 `~/.ddir/show/media/sources.json` 与 `docs/macos-backend.md`
+
 ## 0.11.0 - 2026-11-04
 
 **演出模式 `ddir stage`**：一条命令把桌面变成导播台，全程 ddir 编排，可重复、可回滚。

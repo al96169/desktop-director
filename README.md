@@ -68,6 +68,7 @@ ddir autostart on       # 登录时自动起托盘（LaunchAgent）
 ddir hud                # 右下角轻量小卡：你现在接管了哪些窗口（3 秒）
 ddir hud --wall         # 全屏暗化 + 缩略图墙（演示用）
 ddir doctor             # 权限/签名/托盘/自启体检
+ddir stage fetch        # 抓真实素材（NASA 公有领域影像 + CC0 音乐），离线时自动用本机生成兜底
 ddir stage run          # 演出模式：清场→Mission Control→AI 写代码→双媒体→缩略图墙→收队
 ./mac/test.sh           # 42 项验收（只用 TextEdit 和它自己开的窗口）
 ```

@@ -18,7 +18,8 @@ Swift 6 单文件 CLI（`swiftc` 直接编译，无 SPM / 无第三方依赖）�
 | `Sources/Tray.swift` | 菜单栏托盘（三档/全部还原/auto_close/窗口/托管屏/日志/自启/退出；`--check` 输出菜单 JSON） |
 | `Sources/Hud.swift` | HUD：默认右下角轻量小卡；`--wall` 为全屏暗化 + 缩略图墙（ScreenCaptureKit，14+）|
 | `Sources/Show.swift` | `ddir stage` 演出编排（节拍、清场、journal、回滚） |
-| `Sources/ShowAssets.swift` | 演出素材生成：HTML 仪表盘/IDE、代码、H.264 竖屏片段、环境音 |
+| `Sources/ShowAssets.swift` | 演出素材：HTML 仪表盘/IDE、代码，以及离线兜底的合成片段/环境音 |
+| `Sources/ShowMedia.swift` | 真实素材：NASA/STScI 公有领域影像 + CC0 音乐 → 竖屏 Ken Burns 片段（`stage fetch`）|
 | `Sources/Player.swift` | `ddir play`：自带 AVPlayer 窗口（无 AppleScript、可被 claim 平铺） |
 | `Sources/Web.swift` | `ddir web`：无浏览器 chrome 的 WKWebView 窗口 |
 | `Sources/Doctor.swift` | `ddir doctor` 体检 + `ddir prompt`（bundle 内 AGENTS.m0.md 的打印/安装）|

@@ -25,7 +25,7 @@ enum ShowAssets {
     }
 
     /// Bump when the generated content changes; `ensure()` then rebuilds every asset once.
-    static let assetVersion = "2"
+    static let assetVersion = "3"
     private static func versionPath() -> URL { dir().appendingPathComponent(".version") }
 
     static func ensure(force: Bool = false) throws -> [Inventory] {
@@ -46,8 +46,11 @@ enum ShowAssets {
                                           bottom: NSColor(calibratedRed: 0.05, green: 0.1, blue: 0.35, alpha: 1),
                                           title: "SIGNAL 02", subtitle: "AGENT 02 · WINDOW ORCHESTRATION") }),
         ]
+        // Real media (ShowMedia) replaces these when it has been fetched; don't waste time on them.
+        let haveMedia = !ShowMedia.clips().isEmpty && ShowMedia.score() != nil
         var out: [Inventory] = []
         for (name, make) in files {
+            if haveMedia && (name == "score.wav" || name == "clip1.mov" || name == "clip2.mov") { continue }
             let u = url(name)
             let exists = FileManager.default.fileExists(atPath: u.path)
             if rebuild || !exists {
@@ -116,7 +119,7 @@ enum ShowAssets {
             </div>
           </section>
         </main>
-        <footer><span>T+ <b id="t">00:00</b></span><span>WINDOWS 3</span><span>DISPLAY cg-1</span><span>BUILD 0.10.0</span><span>UPLINK STABLE</span></footer>
+        <footer><span>T+ <b id="t">00:00</b></span><span>WINDOWS 3</span><span>DISPLAY cg-1</span><span>BUILD \(VERSION)</span><span>UPLINK STABLE</span></footer>
         </div>
         <script>
         const c=document.getElementById('radar'),x=c.getContext('2d');let t=0;

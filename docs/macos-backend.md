@@ -92,13 +92,29 @@ ddir hud --check            # 只输出将要展示的 JSON（style/tiles/权限
 可重复播放，且任何中断都能回滚。
 
 ```bash
-ddir stage assets [--force]   # 在 ~/.ddir/show 生成 6 个素材（本机生成，不下载）
+ddir stage fetch [--force]    # 下载真实素材并生成竖屏片段（首次需要网络）
+ddir stage assets [--force]   # 本机生成兜底素材（HTML / IDE / 代码 / 合成片段）
 ddir stage run                # 完整演出（约 70 秒），结束后自动回滚
 ddir stage run --keep         # 演完不收拾（手动 ddir stage rollback）
 ddir stage run --fast         # 快进版，用于冒烟测试
 ddir stage rollback           # 关掉它开的窗口、还原布局/档位、恢复被隐藏的应用
 ddir stage status
 ```
+
+### 素材：真的去网上找
+
+| 用途 | 来源 | 许可 |
+|---|---|---|
+| 片段 1（星云） | NASA/STScI **JWST Carina Nebula**（"Cosmic Cliffs"） | Public Domain (NASA) |
+| 片段 2（星系） | NASA/ESA **Hubble 螺旋星系** | Public Domain (NASA) |
+| 环境音乐 | **"Another space background track"** — yd / OpenGameArt | **CC0 1.0** |
+
+- 下载一次缓存到 `~/.ddir/show/media/`，并写 `sources.json`（标题/作者/许可/URL），
+  `ddir stage fetch` 可重新拉取；**没有网络时自动退回本机生成的素材**，演出不会断。
+- 静态图会被转成 **12 秒竖屏 Ken Burns 片段**（540×960、H.264、缓慢推镜 + 轻微平移 + 柔边暗角），
+  这样三列平铺时是满屏的，不会出现横屏素材那种上下大黑边。
+- 音乐是 46 秒循环：`afplay` 不会自动循环，所以用一个 `loop-score.sh` 包一层（`trap` 杀掉子进程），
+  回滚时 kill 包装脚本即可，不留后台播放。
 
 节拍（实测时间，`stage run` 输出里也有）：
 
@@ -128,8 +144,10 @@ ddir stage status
   （AVPlayer 窗口，独立进程，可被 claim 平铺），不依赖 AppleScript。
 - **播放器别把 AVPlayerLayer 直接当 view 的 backing layer**，否则窗口会透明（桌面透出来）；
   用黑底 CALayer + 子 layer。
-- **素材尺寸要匹配版式**：三列时每列是 538×942，所以视频生成成 540×960 竖屏，
+- **素材尺寸要匹配版式**：三列时每列是 538×942，所以片段统一 540×960 竖屏，
   平铺后满屏无黑边；横屏素材在竖列里会留下大片黑边。
+- **Ken Burns 的暗角别用 `drawsAfterEndLocation`**：那会在画面上画出一个硬边圆形（像个 bug），
+  正确的做法是"中心透明 → 边缘黑"、`options: []`。
 
 录制：`screencapture -v -V 80 out.mov` → AVFoundation 导出 1680×1050 H.264 + 把 `score.wav` 拼成音轨
 （`AVMutableAudioMix` 压到 0.45）。演示视频不进仓库。

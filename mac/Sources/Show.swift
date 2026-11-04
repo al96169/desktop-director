@@ -255,11 +255,13 @@ private func stageRun(_ args: [String]) -> Int32 {
         store.log("stage: beat \(name) at \(String(format: "%.1f", Date().timeIntervalSince(t0)))s")
     }
 
-    // ambient score (afplay has no window; volume kept low)
-    if audio {
+    // ambient score: downloaded CC0 track (looped) or the generated pad, no window either way
+    if audio, let score = ShowMedia.score() {
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/afplay")
-        p.arguments = ["-v", "0.35", ShowAssets.url("score.wav").path]
+        p.executableURL = ShowMedia.scoreLoopScript()
+        p.arguments = [score.path, "0.30"]
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
         if (try? p.run()) != nil {
             journal.audioPid = p.processIdentifier
             saveJournal(journal)
@@ -301,8 +303,11 @@ private func stageRun(_ args: [String]) -> Int32 {
 
     // ---- 3. media: two clips join the triptych ----------------------------
     let playerBefore = Set(win.listWindows().filter { sameApp($0.app, "Ddir") }.map { $0.ref })
-    for clip in ["clip1.mov", "clip2.mov"] {
-        let p = spawnSelf(["play", ShowAssets.url(clip).path])
+    let media = ShowMedia.clips()
+    let clips = media.isEmpty ? [ShowAssets.url("clip1.mov"), ShowAssets.url("clip2.mov")] : media
+    for clipURL in clips {
+        let clip = clipURL.lastPathComponent
+        let p = spawnSelf(["play", clipURL.path])
         store.log("stage: spawned player for \(clip) pid=\(p?.processIdentifier ?? -1)")
         if let w = waitForWindow(app: "Ddir", title: clip, excluding: playerBefore) {
             journal.opened.append(.init(ref: w.ref, app: w.app, bundle: win.bundleId(w.pid), title: w.title))
@@ -326,7 +331,8 @@ private func stageRun(_ args: [String]) -> Int32 {
         _ = win.closeWindow(pid: d.pid, title: d.title)
     }
     usleep(300_000)
-    _ = runSelf(["claim", "--needs", "clip1.mov,clip2.mov,code.swift", "--force"])
+    let clipNames = clips.map { $0.lastPathComponent }.joined(separator: ",")
+    _ = runSelf(["claim", "--needs", "\(clipNames),code.swift", "--force"])
     _ = spawnSelf(["hud", "--seconds", "3"])?.waitUntilExit()
     pace.sleep(pace.scaled(pace.media))
     beat("triptych")
@@ -366,6 +372,15 @@ func cmdStage(_ args: [String]) -> Int32 {
             emit("{\"ok\":false,\"error\":\"\(es(error.localizedDescription))\"}")
             return 1
         }
+    case "fetch":
+        do {
+            let got = try ShowMedia.fetch(force: hasFlag(args, "--force"))
+            let rows = got.map { "{\"file\":\"\(es($0.file))\",\"title\":\"\(es($0.title))\",\"license\":\"\(es($0.license))\"}" }
+            emit("{\"ok\":true,\"dir\":\"\(es(ShowMedia.dir().path))\",\"clips\":\(ShowMedia.clips().count),\"sources\":[\(rows.joined(separator: ","))]}")
+        } catch {
+            emit("{\"ok\":false,\"error\":\"\(es(error.localizedDescription))\",\"hint\":\"需要网络；失败时 stage 会退回本机生成素材\"}")
+            return 1
+        }
     case "rollback":
         _ = stageRollback()
     case "status":
@@ -377,7 +392,7 @@ func cmdStage(_ args: [String]) -> Int32 {
     case "run":
         return stageRun(args)
     default:
-        emit("{\"ok\":false,\"error\":\"unknown_stage_subcmd\",\"hint\":\"assets|run|rollback|status\"}")
+        emit("{\"ok\":false,\"error\":\"unknown_stage_subcmd\",\"hint\":\"fetch|assets|run|rollback|status\"}")
     }
     return 0
 }

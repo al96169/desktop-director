@@ -70,6 +70,7 @@ ddir hud --wall         # 全屏暗化 + 缩略图墙（演示用）
 ddir doctor             # 权限/签名/托盘/自启体检
 ddir stage fetch        # 抓真实素材（NASA 公有领域影像 + CC0 音乐），离线时自动用本机生成兜底
 ddir stage run          # 演出模式：清场→Mission Control→AI 写代码→双媒体→缩略图墙→收队
+python3 demo/webdev/run.py   # 跨平台网页开发演示（终端 + VSCode + Playwright/Edge）
 ./mac/test.sh           # 42 项验收（只用 TextEdit 和它自己开的窗口）
 ```
 

@@ -43,10 +43,10 @@ check "doctor ok" "$(echo "$DOC" | json 'd["ok"]')" "True"
 check "doctor accessibility" "$(echo "$DOC" | json 'next(c["ok"] for c in d["checks"] if c["name"]=="accessibility")')" "True"
 check "doctor signed" "$(echo "$DOC" | json '[c["status"] for c in d["checks"] if c["name"]=="signed"][0]')" "ok"
 
-# 1. mode + list
+# 1. mode + list (>=3 windows is asserted again once the TextEdit docs are open)
 "$DDIR" mode semi >/dev/null
 N=$("$DDIR" list | json 'len(d["windows"])')
-[ "$N" -ge 3 ] && ok "list sees >=3 windows ($N)" || bad "list sees >=3 windows" "got $N"
+[ "$N" -ge 1 ] && ok "list sees windows ($N)" || bad "list sees windows" "got $N"
 TITLED=$("$DDIR" list | json 'sum(1 for w in d["windows"] if w["title"].strip())')
 check "list titles non-empty" "$TITLED" "$N"
 
@@ -76,6 +76,7 @@ rect_of() { ddir_list | python3 -c "import json,sys;d=json.load(sys.stdin);print
 
 # 3. move + readback (<=1pt)
 "$DDIR" move --window "$A" --rect "240,160,600,500" --force >/dev/null
+check "three docs tiled by ddir" "$(ddir_list | json 'sum(1 for w in d["windows"] if w["app"]=="TextEdit")')" "3"
 check "move readback" "$(rect_of a.txt)" "240,160,600,500"
 PRE_A="$(rect_of a.txt)"   # claim/release must come back to where the window was pre-claim
 

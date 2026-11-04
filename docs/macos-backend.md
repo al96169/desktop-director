@@ -157,7 +157,7 @@ ddir stage status
 ```bash
 ddir doctor            # JSON：12 项检查（ok / warn / fail）
 ddir doctor --text     # 人读版；有 fail 时退出码 1
-ddir prompt            # 打印打包进 bundle 的 AGENTS.m0.md（跨平台 v1.9）
+ddir prompt            # 打印打包进 bundle 的 AGENTS.m0.md（跨平台 v2.0：含轻量演示规则）
 ddir prompt --install  # 写到 ~/.dsh/AGENTS.md（Agent 下次启动生效）
 ddir selftest --write  # 自己开窗口跑 move/hide/show/close，7+6 项
 ```

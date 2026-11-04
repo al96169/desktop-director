@@ -14,6 +14,18 @@
 
 ---
 
+## 当前状态（0.7.2，2026-11-04）
+
+| 已完成 | 未完成 |
+|---|---|
+| Windows 后端（枚举/并排/隐藏/还原） | macOS 后端（能力已验证，实现待做） |
+| 租约排他 + 文件锁 + 心跳 + 优先级抢占 + 焦点令牌 | Linux 后端（只有设计） |
+| 软件认领 + 只关自己 + `auto undo` | HUD（缩略图墙/暗化） |
+| auto 10s 武装 + 默认 `auto_close=off` | 托管屏"借用"与热插拔回滚 |
+| Rust 托盘（三档/还原/日志/自启） | 软件所有权到进程级 |
+| 配置 + 日志 + 演示节拍 + `ddir demo` | `unmanaged_kill` 自动降档（默认关） |
+
+Mac 上继续开发：见 [docs/mac-agent-task.md](docs/mac-agent-task.md)。
 ## 一句话
 
 **给屏幕和软件发租约**：谁要用哪块屏、哪个窗口、哪个软件，先向 `ddir` 申请；拿不到就换方案，而不是互相抢。用户永远是最高优先级，且可以物理隔离（把几块屏收回来自己用）。
@@ -107,7 +119,7 @@ target\release\ddir.exe selftest
 | M2.5 | auto 处决：武装倒计时 + `WM_CLOSE` 管道 + `undo-close` | ✅ 骨架：`ddir auto on/plan/close/undo`，30s 倒计时、只发 `WM_CLOSE`、记录重启路径与位置、`undo` 拉回 |
 | M3 | 托盘三档 | ✅ **Rust 原生托盘**（`ddir tray`）：三档切换 / 全部还原 / 窗口列表 / 开机自启 / 单实例，7.8MB 内存 |
 | M4 | HUD 装饰层（缩略图墙 / 暗化 / 入场动画） | 未开始 |
-| M5 | 多 Agent 仲裁：`claim/own/close/revoke` + 看板 | 🔶 租约排他（I1）+ `window_owned_by` + `board`，已用双 Agent 抢屏验证；优先级/抢占未完 |
+| M5 | 多 Agent 仲裁 | ✅ 租约排他 + 文件锁 + 心跳 + 优先级抢占 + 焦点令牌 + `unmanaged_kill` 检测；仅"软件所有权到进程级"未做 |
 | M6 | auto × 多 Agent：关闭保护 + `unmanaged_kill` 检测降档 | 未开始 |
 
 > 执行顺序、任务拆分、人日/日历估算与每档 Gate 见 **[docs/plan.md](docs/plan.md)**。

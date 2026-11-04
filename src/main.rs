@@ -244,9 +244,10 @@ fn cmd_list(args: &[String]) -> i32 {
         .iter()
         .map(|w| {
             format!(
-                "{{\"hwnd\":\"{}\",\"app\":\"{}\",\"class\":\"{}\",\"title\":\"{}\",\"display\":\"{}\",\"rect\":{},\"win\":{},\"dpi\":{},\"maximized\":{},\"minimized\":{},\"foreground\":{}}}",
+                "{{\"hwnd\":\"{}\",\"app\":\"{}\",\"pid\":{},\"class\":\"{}\",\"title\":\"{}\",\"display\":\"{}\",\"rect\":{},\"win\":{},\"dpi\":{},\"maximized\":{},\"minimized\":{},\"foreground\":{}}}",
                 w.hex,
                 esc(&w.app),
+                w.pid,
                 esc(&w.class),
                 esc(&w.title),
                 esc(&w.display),
@@ -553,17 +554,82 @@ fn cmd_show_hide(args: &[String], hide: bool) -> i32 {
     0
 }
 
-fn owned_by_me(app: &str, me: &str) -> Result<(), String> {
+
+
+fn cmd_doctor() -> i32 {
+    let mut pass = 0;
+    let mut warn = 0;
+    let mut fail = 0;
+    let mut line = |level: &str, msg: &str| match level {
+        "FAIL" => { fail += 1; println!("FAIL  {}", msg); }
+        "WARN" => { warn += 1; println!("WARN  {}", msg); }
+        _ => { pass += 1; println!("PASS  {}", msg); }
+    };
+    // state dir
+    let home = store::home();
+    line(if home.exists() { "PASS" } else { "FAIL" }, &format!("state dir {}", home.display()));
+    // mode
+    let m = store::mode();
+    line(if ["off", "semi", "auto"].contains(&m.as_str()) { "PASS" } else { "FAIL" }, &format!("mode = {}", m));
+    // config parse
+    let cfg = store::config_all();
+    let mut cfg_bad = 0;
+    for (k, v) in &cfg {
+        if k == "countdown_seconds" && v.parse::<u64>().is_err() { cfg_bad += 1; }
+        if k == "step_ms" && v.parse::<u64>().map(|n| (50..=5000).contains(&n)).unwrap_or(false) == false { cfg_bad += 1; }
+        if k == "auto_close" && !["off", "minimize", "close"].contains(&v.as_str()) { cfg_bad += 1; }
+        if k == "presentation" && !["instant", "paced"].contains(&v.as_str()) { cfg_bad += 1; }
+    }
+    line(if cfg_bad == 0 { "PASS" } else { "FAIL" }, &format!("config entries = {} (bad {})", cfg.len(), cfg_bad));
+    // leases
+    let now = store::now_unix();
+    let leases = store::leases();
+    let live = leases.iter().filter(|l| l.expires > now).count();
+    let stale = leases.len() - live;
+    line("PASS", &format!("leases total {} live {} stale {}", leases.len(), live, stale));
+    if stale > 0 { println!("      (stale leases are ignored at read time)"); }
+    // lock
+    let lock = home.join("state.lock");
+    let lock_age = std::fs::metadata(&lock).ok().and_then(|m| m.modified().ok()).and_then(|t| t.elapsed().ok()).map(|d| d.as_secs()).unwrap_or(0);
+    if lock.exists() && lock_age > 10 {
+        line("WARN", &format!("stale lock file {} ({}s old) - will be stolen on next write", lock.display(), lock_age));
+    } else {
+        line("PASS", "no stale lock");
+    }
+    // queue
+    let q = home.join("queue");
+    let qn = std::fs::read_dir(&q).map(|rd| rd.count()).unwrap_or(0);
+    line(if qn < 50 { "PASS" } else { "WARN" }, &format!("presentation queue files = {}", qn));
+    // displays
+    let ds = win::displays();
+    line(if ds.is_empty() { "FAIL" } else { "PASS" }, &format!("displays = {} managed = {}", ds.len(), ds.iter().filter(|d| d.managed).count()));
+    // log
+    let log = store::log_path();
+    let logmb = std::fs::metadata(&log).map(|m| m.len() as f64 / 1048576.0).unwrap_or(0.0);
+    line(if logmb < 2.1 { "PASS" } else { "WARN" }, &format!("log size {:.2} MB", logmb));
+    // tray running?
+    let tray = std::process::Command::new("tasklist").args(["/FI", "IMAGENAME eq ddir.exe", "/NH"]).output().ok();
+    let tray_running = tray.map(|o| String::from_utf8_lossy(&o.stdout).matches("ddir.exe").count()).unwrap_or(0) > 0;
+    line(if tray_running { "PASS" } else { "WARN" }, if tray_running { "tray appears to be running" } else { "tray not running (ddir tray)" });
+    println!("---");
+    println!("RESULT: {} passed, {} warnings, {} failed", pass, warn, fail);
+    if fail > 0 { 1 } else { 0 }
+}
+
+fn owned_by_me(app: &str, pid: u32, me: &str) -> Result<(), String> {
     let now = store::now_unix();
     let apps = store::apps();
-    match apps.iter().find(|a| a.app.eq_ignore_ascii_case(app)) {
+    let exact = format!("pid:{}", pid);
+    if let Some(a) = apps.iter().find(|a| a.app == exact && a.since + a.ttl > now) {
+        if a.owner == me { return Ok(()); }
+        return Err(format!("owned_by_other:{}", a.owner));
+    }
+    match apps.iter().find(|a| a.app.eq_ignore_ascii_case(app) && a.since + a.ttl > now) {
         None => Err("not_owned".into()),
-        Some(a) if a.since + a.ttl <= now => Err("not_owned".into()),
         Some(a) if a.owner != me => Err(format!("owned_by_other:{}", a.owner)),
         Some(_) => Ok(()),
     }
 }
-
 fn cmd_close(args: &[String]) -> i32 {
     if !mode_guard() { return 0; }
     let hwnd = match arg(args, "--window").and_then(|s| win::parse_hwnd(&s)) {
@@ -582,7 +648,7 @@ fn cmd_close(args: &[String]) -> i32 {
         }
     };
     let me = win::agent_id();
-    match owned_by_me(&w.app, &me) {
+    match owned_by_me(&w.app, w.pid, &me) {
         Err(e) if e.starts_with("owned_by_other") => {
             let owner = e.split(':').nth(1).unwrap_or("?");
             println!("{{\"ok\":false,\"error\":\"owned_by_other\",\"owner_agent\":\"{}\"}}", esc(owner));
@@ -616,7 +682,8 @@ fn cmd_close(args: &[String]) -> i32 {
 }
 
 fn cmd_own(args: &[String], disown: bool) -> i32 {
-    let app = match arg(args, "--app") {
+    let pid = arg(args, "--pid");
+    let app = match arg(args, "--app").or_else(|| pid.as_ref().map(|p| format!("pid:{}", p))) {
         Some(a) => a,
         None => {
             println!("{{\"ok\":false,\"error\":\"invalid_args\",\"hint\":\"own --app <name>\"}}");
@@ -1204,7 +1271,7 @@ fn usage() {
     println!("  ddir move --window 0x.. --rect x,y,w,h [--force]");
     println!("  ddir hide|show --window 0x..           hide records a lease; release restores");
     println!("  ddir close --window 0x..               WM_CLOSE, owned apps only");
-    println!("  ddir own --app <n> | disown --app <n>  software ownership");
+    println!("  ddir own --app <n> | --pid <PID> | disown ...   software ownership");
     println!("  ddir release                           restore my leases");
     println!("  ddir heartbeat                         renew my lease TTL");
     println!("  ddir focus [--seconds N] | focus release   focus token");
@@ -1215,6 +1282,7 @@ fn usage() {
     println!("  ddir demo                              scripted demo (opens/closes its own windows)");
     println!("  ddir tray                              tray icon (modes/restore/log/autostart)");
     println!("  ddir autostart [on|off|status]         run tray at login");
+    println!("  ddir doctor                            diagnose state/config/display problems");
     println!("  ddir board                             human readable overview");
     println!("  ddir selftest                          platform conformance checks");
     println!();
@@ -1222,6 +1290,8 @@ fn usage() {
 }
 
 fn main() {
+    // per-monitor v2 so window rects are real pixels on mixed-DPI setups
+    unsafe { win::set_dpi_awareness(); }
     store::ensure_home();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = args.first().map(|s| s.to_lowercase()).unwrap_or_else(|| "help".into());
@@ -1246,6 +1316,7 @@ fn main() {
         "autostart" => cmd_autostart(rest),
         "auto" => cmd_auto(rest),
         "config" => cmd_config(rest),
+        "doctor" => cmd_doctor(),
         "flush" => cmd_flush(),
         "heartbeat" | "hb" => cmd_heartbeat(),
         "focus" => cmd_focus(rest),

@@ -16,6 +16,35 @@ pub fn home() -> PathBuf {
     p
 }
 
+pub fn atomic_write(path: &std::path::Path, data: &str) -> std::io::Result<()> {
+    let tmp = path.with_extension("tmp");
+    fs::write(&tmp, data)?;
+    fs::rename(&tmp, path)
+}
+
+/// Cross-process lock around state mutation: a lock file created with create_new + retry.
+pub struct Guard(std::path::PathBuf);
+impl Drop for Guard {
+    fn drop(&mut self) { let _ = fs::remove_file(&self.0); }
+}
+pub fn lock() -> Guard {
+    ensure_home();
+    let p = home().join("state.lock");
+    let mut waited = 0u64;
+    loop {
+        match fs::OpenOptions::new().create_new(true).write(true).open(&p) {
+            Ok(_) => return Guard(p),
+            Err(_) => {
+                std::thread::sleep(std::time::Duration::from_millis(15));
+                waited += 15;
+                if waited > 3000 {
+                    let _ = fs::remove_file(&p); // stale lock from a crashed process
+                }
+            }
+        }
+    }
+}
+
 pub fn ensure_home() {
     let _ = fs::create_dir_all(home());
 }
@@ -52,6 +81,8 @@ pub struct Lease {
     pub to: [i32; 4],
     pub expires: u64,
     pub lease: String,
+    pub priority: String,
+    pub since: u64,
 }
 
 fn leases_path() -> PathBuf {
@@ -82,6 +113,8 @@ pub fn leases() -> Vec<Lease> {
                 to: parse_rect(f[4]),
                 expires: f[5].parse().unwrap_or(0),
                 lease: f[6].into(),
+                priority: f.get(7).map(|s| s.to_string()).unwrap_or_else(|| "normal".into()),
+                since: f.get(8).and_then(|s| s.parse().ok()).unwrap_or(0),
             });
         }
     }
@@ -93,12 +126,12 @@ pub fn save_leases(items: &[Lease]) {
     let mut s = String::new();
     for l in items {
         s.push_str(&format!(
-            "{}\t{}\t{}\t{},{},{},{}\t{},{},{},{}\t{}\t{}\t\n",
+            "{}\t{}\t{}\t{},{},{},{}\t{},{},{},{}\t{}\t{}\t{}\t{}\n",
             l.window, l.agent, l.action, l.from[0], l.from[1], l.from[2], l.from[3],
-            l.to[0], l.to[1], l.to[2], l.to[3], l.expires, l.lease
+            l.to[0], l.to[1], l.to[2], l.to[3], l.expires, l.lease, l.priority, l.since
         ));
     }
-    let _ = fs::write(leases_path(), s);
+    let _ = atomic_write(&leases_path(), &s);
 }
 
 pub fn now_unix() -> u64 {
@@ -151,7 +184,7 @@ pub fn save_apps(v: &[AppOwner]) {
     for a in v {
         s.push_str(&format!("{}\t{}\t{}\t{}\n", a.app, a.owner, a.since, a.ttl));
     }
-    let _ = fs::write(apps_path(), s);
+    let _ = atomic_write(&apps_path(), &s);
 }
 
 pub fn audit(op: &str, detail: &str) {
@@ -203,6 +236,11 @@ pub fn config_set(key: &str, value: &str) -> Result<(), String> {
                 return Err("presentation must be instant|paced".into());
             }
         }
+        "downgrade_on_unmanaged_kill" => {
+            if !["true", "false"].contains(&value) {
+                return Err("downgrade_on_unmanaged_kill must be true|false".into());
+            }
+        }
         "step_ms" => {
             if value.parse::<u64>().map(|n| (50..=5000).contains(&n)).unwrap_or(false) == false {
                 return Err("step_ms must be 50..5000".into());
@@ -224,7 +262,7 @@ pub fn config_set(key: &str, value: &str) -> Result<(), String> {
     let mut s = String::from("# ddir config (edited by `ddir config`)\n");
     s.push_str("# auto_close: off = 永不自动关窗口 / minimize = 最小化代替关闭 / close = WM_CLOSE\n");
     for (k, v) in map { s.push_str(&format!("{}={}\n", k, v)); }
-    fs::write(config_path(), s).map_err(|e| e.to_string())
+    atomic_write(&config_path(), &s).map_err(|e| e.to_string())
 }
 
 // ---------- user-facing log ----------

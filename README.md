@@ -9,23 +9,24 @@
 | 命令 / 可执行 | `ddir`（`ddir daemon` 常驻，`ddir <cmd>` 是客户端，同一个 exe） |
 | 状态目录 | `~/.ddir/`（`mode.txt` / `leases.tsv` / `apps.tsv` / `audit.tsv`） |
 | 形态 | v0.1 是**单文件 CLI**（每次调用读写 `~/.ddir`）；常驻 daemon + 管道 / MCP 在 M3 之后 |
-| 平台 | **Windows / macOS / Linux 三平台**（协议一份，后端各一份；能力差异见 [docs/platforms.md](docs/platforms.md)） |
+| 平台 | **Windows / macOS 已实现，Linux 只有设计**（协议一份，后端各一份；能力差异见 [docs/platforms.md](docs/platforms.md)、macOS 细节见 [docs/macos-backend.md](docs/macos-backend.md)） |
 | 文档 | 规划 [plan](docs/plan.md) · 协议 [protocol](docs/protocol.md) · 平台 [platforms](docs/platforms.md) · 决策 [decisions](docs/decisions.md) |
 
 ---
 
-## 当前状态（0.7.2，2026-11-04）
+## 当前状态（0.7.3，2026-11-04）
 
 | 已完成 | 未完成 |
 |---|---|
-| Windows 后端（枚举/并排/隐藏/还原） | macOS 后端（能力已验证，实现待做） |
-| 租约排他 + 文件锁 + 心跳 + 优先级抢占 + 焦点令牌 | Linux 后端（只有设计） |
-| 软件认领 + 只关自己 + `auto undo` | HUD（缩略图墙/暗化） |
-| auto 10s 武装 + 默认 `auto_close=off` | 托管屏"借用"与热插拔回滚 |
-| Rust 托盘（三档/还原/日志/自启） | 软件所有权到进程级 |
-| 配置 + 日志 + 演示节拍 + `ddir demo` | `unmanaged_kill` 自动降档（默认关） |
+| Windows 后端（枚举/并排/隐藏/还原） | Linux 后端（只有设计） |
+| **macOS 后端**（AX：枚举/并排/隐藏/关闭/空闲，`selftest` 7/7） | macOS 托盘 / HUD / 开机自启 |
+| 租约排他 + 文件锁 + 心跳 + 优先级抢占 + 焦点令牌 | 托管屏"借用"与热插拔回滚 |
+| 软件认领 + 只关自己 + `auto undo` | 软件所有权到进程级 |
+| auto 10s 武装 + 默认 `auto_close=off` | HUD（缩略图墙/暗化） |
+| Rust 托盘（三档/还原/日志/自启，Windows） | `unmanaged_kill` 自动降档（默认关） |
+| 配置 + 日志 + 演示节拍 + `ddir demo` | |
 
-Mac 上继续开发：见 [docs/mac-agent-task.md](docs/mac-agent-task.md)。
+macOS 后端的实现/权限/差异：见 [docs/macos-backend.md](docs/macos-backend.md)（任务书 [mac-agent-task.md](docs/mac-agent-task.md) 已归档为历史）。
 ## 一句话
 
 **给屏幕和软件发租约**：谁要用哪块屏、哪个窗口、哪个软件，先向 `ddir` 申请；拿不到就换方案，而不是互相抢。用户永远是最高优先级，且可以物理隔离（把几块屏收回来自己用）。
@@ -51,7 +52,24 @@ ddir auto undo             # 把刚关掉的拉回来
 powershell -ExecutionPolicy Bypass -File dist\install.ps1 -WithPrompt
 ```
 
-从源码构建（MinGW-w64 + cargo，环境见 `docs/toolchain.md`）：
+## 快速开始（macOS arm64，13+）
+
+```bash
+git clone https://github.com/al96169/desktop-director ~/desktop-director && cd ~/desktop-director
+./mac/build.sh          # swiftc -> ~/Applications/Ddir.app（ddir-dev 签名）-> ~/.local/bin/ddir
+ddir selftest           # 7 项平台自检（首次需要给 Ddir 授权"辅助功能"）
+ddir mode semi
+ddir displays           # 哪块屏归 Agent（单屏时按 D15 托管这块屏）
+ddir list --text        # 窗口列表；window 形如 75098:7449
+ddir claim --needs "a.txt,b.txt" --force   # 等宽并排
+ddir release            # 还原
+./mac/test.sh           # 15 项验收（只用 TextEdit 和它自己开的窗口）
+```
+
+macOS 的权限与平台差异（`hide` 只能整应用、`close` 不退进程、window-id 不是 hwnd）见
+[docs/macos-backend.md](docs/macos-backend.md)。
+
+从源码构建 Windows 版（MinGW-w64 + cargo，环境见 `docs/toolchain.md`）：
 
 ```cmd
 call tools\dev-env.cmd

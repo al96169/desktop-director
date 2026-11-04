@@ -1,6 +1,6 @@
 # Desktop Director（ddir）— 窗口编排规矩
 
-> 安装版 v1.7（2026-11-04）。适用任何接入本机的 Agent；不依赖具体 Harness。
+> 安装版 v1.8（2026-11-04）。适用任何接入本机的 Agent；不依赖具体 Harness。Windows / macOS 同一套命令。
 > 安装方式：把本文件整段贴进你所用的全局指令（`~/.dsh/AGENTS.md`、`CLAUDE.md`、`AGENTS.md` 等）。
 > 详细设计见仓库 `prompts/AGENTS.ddir.md`，命令全集见 `ddir help`。
 
@@ -20,6 +20,13 @@ ddir displays              # 哪些屏归你（managed）；其余是用户的
 ddir status                # 我的租约、我负责的软件、焦点令牌、用户是否在动
 ```
 
+## 平台差异（先看 `ddir status` 的 `caps`）
+
+- **window-id 的写法**：Windows 是 `0x001A2B3C`；macOS 是 `pid:CGWindowNumber`（如 `75098:7449`）。都从 `ddir list` 复制，不要自己拼。
+- **macOS 的 hide 是整应用**（`caps.window_hide == "app"`）：`hide` 会把该应用的所有窗口一起隐起来，`release` 一起恢复。想只藏一个窗口就在 macOS 上用最小化或直接不改。
+- **`permission_required`**：macOS 需要"系统设置 → 隐私与安全性 → 辅助功能"里勾选 `Ddir`；没授权时所有写操作都返回这个码，只读命令（`list`/`status`）仍可用。
+- **`unsupported_on_platform`**：托盘、开机自启等平台专属功能，macOS 当前未实现，不要绕路实现。
+
 ## 开任务时
 
 1. 先 `ddir claim`，只申请这一步需要的 1–3 个窗口（主窗口 + 参考窗口）。
@@ -29,8 +36,8 @@ ddir status                # 我的租约、我负责的软件、焦点令牌、
 5. **新开的软件常落在主屏**：`claim` 会跨屏匹配窗口并把它拉到托管屏，`release` 再放回原位置。不用先手动搬。
 6. 终端用"列×行"表达（约 120×32）；IDE 至少 1200×800。
 7. 一次只改一个窗口的几何，改完 `ddir status` 确认，再改下一个。
-8. `--rect` 必须加引号：`ddir move --window 0x... --rect "0,0,1280,918"`（不加会被 shell 按逗号拆参）。
-9. 多余的窗口**收起来而不是关掉**：`ddir hide --window <hwnd>`（会记一条 `action=hide` 的租约，`release` 能恢复）；`ddir own --app <名字>` 是给软件上"负责人"标记，防止别的 Agent 关它。
+8. `--rect` 必须加引号：`ddir move --window <window-id> --rect "0,0,1280,918"`（不加会被 shell 按逗号拆参）。
+9. 多余的窗口**收起来而不是关掉**：`ddir hide --window <window-id>`（会记一条 `action=hide` 的租约，`release` 能恢复）；`ddir own --app <名字>` 是给软件上"负责人"标记，防止别的 Agent 关它。
 10. 返回 `user_active` 时说明用户正在操作：等它空闲，或加 `--force` 并说明理由。
 
 ## 用软件时
@@ -41,7 +48,7 @@ ddir disown --app "Code"     # 干完还回去
 ```
 
 - `own` 返回 `owned_by_other` → 换实例或换方案，**不要重试**。
-- 关闭只能 `ddir close --window <hwnd>`：只能关自己 `own` 过的，只发 `WM_CLOSE`、等 3 秒；`close_blocked` 表示有未保存内容，**不要重试**。
+- 关闭只能 `ddir close --window <window-id>`：只能关自己 `own` 过的，发关闭请求后等 3 秒（Windows `WM_CLOSE` / macOS AX 关闭按钮）；`close_blocked` 表示有未保存内容，**不要重试**。
 - **永远不要** `taskkill` / `Stop-Process` / `kill`。绕过会被记 `unmanaged_kill`。
 
 ## 多个 Agent 并存时

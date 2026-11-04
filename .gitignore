@@ -1,6 +1,10 @@
 ﻿# Rust
 /target/
 
+# macOS 构建产物（二进制 + bundle 不进仓库）
+mac/build/
+*.app
+
 # Node
 node_modules/
 npm-debug.log*

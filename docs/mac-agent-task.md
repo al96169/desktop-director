@@ -1,5 +1,8 @@
 # Mac 上继续开发 · 任务书（v0.7.2 基线）
 
+> **状态：已完成（0.7.3，2026-11-04）** — 实现与实测记录见 [macos-backend.md](macos-backend.md)。
+> 本文件保留为当日下发的任务书原文（历史），新的改动请改 macos-backend.md。
+
 > 给 Mac 上的 DSH Agent。仓库已在这台机器上（`~/desktop-director`，可能是旧快照）。
 > 目标：实现 **ddir 的 macOS 后端**，命令集/JSON 与 Windows 版一致，并通过 `selftest`。
 

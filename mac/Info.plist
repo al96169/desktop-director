@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Bundle identity is load-bearing: com.ddir.mac + ~/Applications/Ddir.app hold the
+     accessibility (TCC) grant. Changing either forces the user to re-authorize. -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Ddir</string>
+  <key>CFBundleDisplayName</key><string>Desktop Director</string>
+  <key>CFBundleIdentifier</key><string>com.ddir.mac</string>
+  <key>CFBundleExecutable</key><string>Ddir</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>0.7.3</string>
+  <key>CFBundleVersion</key><string>0.7.3</string>
+  <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>LSUIElement</key><true/>
+  <key>NSHighResolutionCapable</key><true/>
+</dict>
+</plist>

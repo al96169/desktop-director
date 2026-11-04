@@ -108,7 +108,7 @@
 | 新增 | 内容 | 估时 |
 |---|---|---|
 | **M5.5** | 协议加 `platform`/`caps` + `ddir selftest` 套件 + 后端 trait 抽出（`ddir-core` 保持零平台依赖） | 3–4 人日 |
-| **M7** | macOS 后端（AX 摆放/关闭/空闲 + TCC 检测 + 只读降级） | 6–8 人日 |
+| **M7** | macOS 后端（AX 摆放/关闭/空闲 + TCC 检测 + 只读降级） | ✅ 0.7.3 完成（见 [macos-backend.md](macos-backend.md)）；托盘/HUD 待做 |
 | **M8** | Linux X11 后端（EWMH） | 4–6 人日 |
 | **M9** | Wayland：Hyprland IPC → KWin 脚本；GNOME 明牌不支持 | 5–8 人日 |
 

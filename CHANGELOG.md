@@ -1,5 +1,19 @@
 ﻿# Changelog
 
+## 0.7.3 - 2026-11-04
+
+**macOS 后端落地**（Swift 6 + Accessibility API，`mac/`）：
+
+- 命令面与 Windows 一致：`mode/displays/list/status/plan/claim/move/hide/show/close/own/disown/release/heartbeat/focus/auto/config/log/flush/board/selftest/demo`
+- 窗口标识 `pid:CGWindowNumber`（CG 号经 `CGWindowListCopyWindowInfo` 按 pid+几何+标题配对，且保证一号一窗）；坐标全程 points
+- `hide` = 应用级（`kAXHiddenAttribute`），`caps.window_hide="app"`；`close` = AX 关闭按钮，关窗不退进程
+- `selftest` 7/7；`mac/test.sh` 15 项验收（TextEdit，只用自己开的窗口）
+- 构建：`./mac/build.sh` → `~/Applications/Ddir.app`（签名 ddir-dev，bundle id 不变，TCC 不掉）→ `~/.local/bin/ddir`
+- 托盘 / 开机自启 / HUD 明确返回 `unsupported_on_platform`（未实现，不静默成功）
+- 新文档 `docs/macos-backend.md`：平台事实、与 Windows 的差异、已知边界
+- 提示词 v1.8：`window-id` 平台中立化（Windows `0x…` / macOS `pid:cgwin`），补「平台差异」小节
+- Rust 版版本号对齐 0.7.3（无行为变更）
+
 ## 0.7.2 - 2026-11-04
 
 - 提示词 v1.7：去掉硬编码路径，补齐 heartbeat / priority / focus / config / log / displays --manage / flush / demo / tray

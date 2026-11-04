@@ -174,6 +174,11 @@ check "tray menu has 退出" "$(echo "$TRAY" | json 'any(i.get("title")=="退出
 check "hud --check ok (toast)" "$("$DDIR" hud --check | json 'd["ok"] and d["tiles"] >= 1 and d["accessibility"] and d["style"]=="toast"')" "True"
 check "hud --check ok (wall)" "$("$DDIR" hud --wall --check | json 'd["ok"] and d["style"]=="wall"')" "True"
 
+STAGE="$("$DDIR" stage assets)"
+check "stage assets count" "$(echo "$STAGE" | json 'len(d["assets"])')" "6"
+check "stage status ok" "$("$DDIR" stage status | json 'd["ok"]')" "True"
+check "stage rollback no-op" "$("$DDIR" stage rollback | json 'd["rollback"]')" "nothing_to_do"
+
 check "autostart reports state" "$("$DDIR" autostart status | json 'isinstance(d["enabled"], bool) and d["plist"].endswith(".plist")')" "True"
 
 # cleanup: close only the windows this script opened

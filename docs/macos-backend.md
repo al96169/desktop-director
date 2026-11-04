@@ -22,6 +22,8 @@
 | `doctor` | ✅ 权限/签名/bundle 路径/状态目录/托盘/自启/提示词一次体检 |
 | `prompt` | ✅ 打进 bundle 的 AGENTS.m0.md：`ddir prompt` 打印、`--install` 写 `~/.dsh/AGENTS.md` |
 | `selftest --write` | ✅ 自己开一个 TextEdit 窗口，测 move/hide/show/close（7+6 项） |
+| `stage`（演出模式） | ✅ `ddir stage run`：清场→Mission Control→AI 写代码→双媒体→缩略图墙→收队，全程 ddir 编排、可回滚 |
+| `play` / `web` | ✅ 自带 AVPlayer 窗口 / 无浏览器 chrome 的 WKWebView 窗口（演出用，不依赖 AppleScript） |
 | HUD（缩略图墙/暗化/入场动画） | ❌ 未做；需要 ScreenCaptureKit + 屏幕录制授权 |
 | 托管屏"借用"、热插拔回滚 | ❌ 未做（与 Windows 同步的欠账） |
 
@@ -83,7 +85,56 @@ ddir hud --check            # 只输出将要展示的 JSON（style/tiles/权限
   没授权就退回应用图标并在标题下注明。缩略图按 `ref` 缓存在 `thumbs`，1s tick 只重绘不重抓。
 - 托盘菜单两条：`HUD 提示（3 秒）` / `HUD 缩略图墙（6 秒）`，复用 `HudController.present`，不嵌套 run loop。
 
-## 4. 体检、提示词、写路径自检
+## 4. 演出模式（`ddir stage`）
+
+一条命令把桌面变成"导播台"：清场 → 亮 Mission Control → AI 现场写代码 → 双媒体并排 →
+缩略图墙 overlay → 收队还原。**全程由 ddir 自己编排**（claim / hud / release / close），
+可重复播放，且任何中断都能回滚。
+
+```bash
+ddir stage assets [--force]   # 在 ~/.ddir/show 生成 6 个素材（本机生成，不下载）
+ddir stage run                # 完整演出（约 70 秒），结束后自动回滚
+ddir stage run --keep         # 演完不收拾（手动 ddir stage rollback）
+ddir stage run --fast         # 快进版，用于冒烟测试
+ddir stage rollback           # 关掉它开的窗口、还原布局/档位、恢复被隐藏的应用
+ddir stage status
+```
+
+节拍（实测时间，`stage run` 输出里也有）：
+
+| # | 节拍 | 用到的命令 |
+|---|---|---|
+| 1 | 清场：隐藏其它所有 App | `hide`（应用级），记进 journal |
+| 2 | 打开 Mission Control（WebView 窗口） | `web`（无地址栏） |
+| 3 | 单窗满屏 + HUD 提示 | `claim`（1 窗）+ `hud` toast |
+| 4 | 打开 IDE 页，两窗并排 | `claim`（2 窗）+ `hud` |
+| 5 | 代码逐字出现（页面内编排） | 页面 JS 打字，`ddir` 只负责窗口 |
+| 6 | 打开两个媒体窗口并排 | `play` ×2 + `claim`（3 窗）|
+| 7 | 缩略图墙 overlay | `hud --wall`（ScreenCaptureKit）|
+| 8 | 收队 | `release` + 关窗 + 恢复隐藏应用/档位 |
+
+关键实现与踩过的坑（都在代码注释里）：
+
+- **不注入键鼠**：VS Code（Electron）与 WebKit 会忽略 `CGEvent` 合成键码，只有原生 AppKit 控件吃
+  unicode 事件。所以"写代码/滚动"是页面内编排（JS 逐字 + 自动滚动），演出只驱动窗口。稳定 > 花哨。
+- **CLI 没有 run loop**：`NSWorkspace.runningApplications` 的缓存只随主 run loop 刷新，
+  所以 `waitForWindow` 里显式 `pump()`，否则刚启动的窗口一直"看不见"（踩过）。
+- **window ref 会重映射**：`pid:CGWindowNumber` 在多次枚举之间可能换号；回滚因此按
+  `(app, title)` 找窗口再关，`title` 在演出里是唯一的。
+- **AX 关窗返回 -25204**：播放器"关窗即退进程"，press 会报 `cannotComplete`，但窗口确实关了——
+  用"关完后按标题复查"来判定成功。
+- **hide 是应用级**：清场会把所有非参演 App 一起隐藏，journal 记下 pid，回滚时逐个 `show`。
+- **QuickTime 的 AppleScript 会弹 TCC 自动化授权**，卡住整场演出；因此自带 `ddir play`
+  （AVPlayer 窗口，独立进程，可被 claim 平铺），不依赖 AppleScript。
+- **播放器别把 AVPlayerLayer 直接当 view 的 backing layer**，否则窗口会透明（桌面透出来）；
+  用黑底 CALayer + 子 layer。
+- **素材尺寸要匹配版式**：三列时每列是 538×942，所以视频生成成 540×960 竖屏，
+  平铺后满屏无黑边；横屏素材在竖列里会留下大片黑边。
+
+录制：`screencapture -v -V 80 out.mov` → AVFoundation 导出 1680×1050 H.264 + 把 `score.wav` 拼成音轨
+（`AVMutableAudioMix` 压到 0.45）。演示视频不进仓库。
+
+## 5. 体检、提示词、写路径自检
 
 ```bash
 ddir doctor            # JSON：12 项检查（ok / warn / fail）
@@ -102,13 +153,13 @@ ddir selftest --write  # 自己开窗口跑 move/hide/show/close，7+6 项
 `selftest --write` 只用它自己打开的 TextEdit 窗口，跑完关掉；`close` 判定兼容 macOS 的
 **窗口 tabbing**（关掉 tab 时 NSWindow 还在、标题换成别的文档，所以"窗口消失 **或** 标题变了"都算关闭成功）。
 
-## 5. 构建 / 安装 / 自测
+## 6. 构建 / 安装 / 自测
 
 ```bash
 cd ~/desktop-director
 ./mac/build.sh              # swiftc -> Ddir.app -> codesign(ddir-dev) -> ~/.local/bin/ddir
 ./mac/build.sh --no-install # 只编译（产物 mac/build/ddir-mac）
-./mac/test.sh               # 39 项验收（TextEdit，只用自己开的窗口）
+./mac/test.sh               # 42 项验收（TextEdit，只用自己开的窗口）
 ```
 
 * App 固定在 `~/Applications/Ddir.app`，bundle id `com.ddir.mac`，可执行文件 `Contents/MacOS/Ddir`。
@@ -117,7 +168,7 @@ cd ~/desktop-director
 * 命令入口：`~/.local/bin/ddir` → `exec ~/Applications/Ddir.app/Contents/MacOS/Ddir "$@"`。
 * 只读命令（`list`/`displays`/`status`/`selftest`）在未授权时仍可用；所有写命令返回 `permission_required`。
 
-## 6. 平台事实（实测，别再试错）
+## 7. 平台事实（实测，别再试错）
 
 | 事实 | 细节 |
 |---|---|
@@ -134,7 +185,7 @@ cd ~/desktop-director
 | 授权归属 | TCC 辅助功能按**签名身份**判定：同一签名二进制即使被拷到 `/tmp` 仍 `accessibility=true`（实测）；屏幕录制当前 `false`，做 HUD 前要重新勾选 `Ddir` |
 | 显示器 | `NSScreen`（左下原点）→ CG（左上原点）换算 `y = mainHeight - (y + h)`；`work` 取 `visibleFrame`（菜单栏 25pt、Dock 已扣除）|
 
-## 7. 与 Windows 版的差异（协议已表达，别当成 bug）
+## 8. 与 Windows 版的差异（协议已表达，别当成 bug）
 
 | 项 | Windows | macOS |
 |---|---|---|
@@ -151,7 +202,7 @@ cd ~/desktop-director
 
 JSON 里额外提供了 `actual`（move 后的读回值）、`hidden`、`pid`、`scale`、`process_alive` 等字段；只增不改，Windows 客户端可忽略。
 
-## 8. 已知边界
+## 9. 已知边界
 
 1. **AX 只对"有窗口的 app"有效**：菜单栏常驻 / 后台进程没有窗口，`list` 看不到（与 Alt-Tab 一致）。
 2. **同一文档开两个窗口**时标题与几何可能完全相同；现在靠 CGWindowNumber 唯一性区分，`close` 一次只关一个。
@@ -166,7 +217,7 @@ JSON 里额外提供了 `actual`（move 后的读回值）、`hidden`、`pid`、
 8. **Windows 的托盘 `全部还原` 有同样的身份问题**（`src/tray.rs` 调 `release_all()`，只释放托盘进程自己的租约）。
    macOS 侧已用 `force: true` 修正；Windows 侧待确认/修复。
 
-### 验收覆盖（`mac/test.sh`，39 项）
+### 验收覆盖（`mac/test.sh`，42 项）
 
 | 组 | 覆盖 |
 |---|---|
@@ -179,8 +230,9 @@ JSON 里额外提供了 `actual`（move 后的读回值）、`hidden`、`pid`、
 | 托盘 | `tray --check` 菜单树包含 模式/全部还原/退出；`autostart status` 结构 |
 | HUD | `hud --check`（toast/wall 两种 style）有图块、accessibility 为真；人工截图验收小卡与缩略图墙 |
 | 体检 / 提示词 | `doctor` ok + accessibility ok + 签名 ok；`selftest --write` 0 failed |
+| 演出 | `stage assets` 6 个素材；`stage status`；`stage rollback` 幂等（完整演出用手工录屏验收）|
 
-## 9. 下一步（按优先级）
+## 10. 下一步（按优先级）
 
 1. 借用屏 / 热插拔回滚（与 Windows 同步欠账；本机只有单屏，要用合成显示器数据验证）。
 2. 软件所有权到进程级（当前粒度是应用名，两个同款实例分不开）。

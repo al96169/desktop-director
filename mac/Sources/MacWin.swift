@@ -60,7 +60,7 @@ final class MacWin {
 
     func appElement(_ pid: pid_t) -> AXUIElement {
         let el = AXUIElementCreateApplication(pid)
-        AXUIElementSetMessagingTimeout(el, 2.0)
+        AXUIElementSetMessagingTimeout(el, 1.0)
         return el
     }
 
@@ -228,12 +228,22 @@ final class MacWin {
         invalidateCG()
         let front = frontPid
         let ds = displays()
+        // regular apps, plus accessory apps that actually own titled windows (e.g. `ddir play`).
         let apps = NSWorkspace.shared.runningApplications
-            .filter { $0.activationPolicy == .regular && $0.processIdentifier > 0 && $0.processIdentifier != getpid() }
+            .filter { $0.processIdentifier > 0 && $0.processIdentifier != getpid() }
+            .filter { app in
+                if app.activationPolicy == .regular { return true }
+                guard app.activationPolicy == .accessory else { return false }
+                return axWindows(app.processIdentifier).contains { el in
+                    str(el, kAXRoleAttribute as String) == "AXWindow"
+                        && !str(el, kAXTitleAttribute as String).trimmingCharacters(in: .whitespaces).isEmpty
+                }
+            }
             .sorted { ($0.localizedName ?? "") < ($1.localizedName ?? "") }
         let scale = Double(NSScreen.main?.backingScaleFactor ?? 1)
         var out: [WinInfo] = []
         for app in apps {
+            if app.isHidden { continue }
             let pid = app.processIdentifier
             let appName = app.executableURL?.lastPathComponent ?? app.localizedName ?? app.bundleIdentifier ?? "?"
             let els = windowsForPid(pid)
@@ -261,7 +271,7 @@ final class MacWin {
                         && abs(w.frame[2] - d.work[2]) <= 2 && abs(w.frame[3] - d.work[3]) <= 2
                 }
                 out.append(WinInfo(
-                    pid: pid, cgwin: nil, ref: w.ref, index: w.index, app: appName, title: w.title,
+                    pid: pid, cgwin: w.cgwin, ref: w.ref, index: w.index, app: appName, title: w.title,
                     subrole: subrole, frame: w.frame, win: w.frame,
                     dpi: Int(72.0 * scale), scale: scale,
                     maximized: fullscreen || nearlyFull, minimized: minimized, hidden: isHidden,
@@ -276,23 +286,23 @@ final class MacWin {
     /// One pass over an app's AX windows, assigning every window a unique ref.
     /// CGWindowNumber is unique per window, so the mapping must never hand the same
     /// number to two AX elements (two documents can share title and geometry).
-    func windowsForPid(_ pid: pid_t) -> [(el: AXUIElement, index: Int, ref: String, frame: [Int], title: String)] {
+    func windowsForPid(_ pid: pid_t) -> [(el: AXUIElement, index: Int, ref: String, frame: [Int], title: String, cgwin: UInt32?)] {
         let els = axWindows(pid)
         var used = Set<UInt32>()
-        var out: [(el: AXUIElement, index: Int, ref: String, frame: [Int], title: String)] = []
+        var out: [(el: AXUIElement, index: Int, ref: String, frame: [Int], title: String, cgwin: UInt32?)] = []
         for (idx, el) in els.enumerated() {
             guard let pos = point(el, kAXPositionAttribute as String),
                   let sz = size(el, kAXSizeAttribute as String) else {
-                out.append((el, idx, "\(pid):\(idx)", [0, 0, 0, 0], ""))
+                out.append((el, idx, "\(pid):\(idx)", [0, 0, 0, 0], "", nil))
                 continue
             }
             let title = str(el, kAXTitleAttribute as String)
             let frame = [Int(pos.x.rounded()), Int(pos.y.rounded()), Int(sz.width.rounded()), Int(sz.height.rounded())]
             if let n = cgNumber(pid: pid, frame: frame, title: title, used: used) {
                 used.insert(n)
-                out.append((el, idx, "\(pid):\(n)", frame, title))
+                out.append((el, idx, "\(pid):\(n)", frame, title, n))
             } else {
-                out.append((el, idx, "\(pid):\(idx)", frame, title))
+                out.append((el, idx, "\(pid):\(idx)", frame, title, nil))
             }
         }
         return out
@@ -417,7 +427,26 @@ final class MacWin {
         return NSRunningApplication(processIdentifier: pid)?.hide() ?? false
     }
 
+    /// Close the window of `pid` whose AX title equals `title`. Used when a ref may have been
+    /// remapped since it was recorded (two windows can share geometry and index fallbacks).
     @discardableResult
+    func closeWindow(pid: pid_t, title: String) -> Bool {
+        for el in axWindows(pid) where str(el, kAXTitleAttribute as String) == title {
+            var v: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(el, kAXCloseButtonAttribute as CFString, &v) == .success,
+                  let btn = v else { continue }
+            let err = AXUIElementPerformAction(btn as! AXUIElement, kAXPressAction as CFString)
+            // -25204 (cannotComplete) is normal when the app quits while handling the close;
+            // confirm by looking for the title afterwards instead of trusting the return code.
+            if err == .success || err == .cannotComplete {
+                usleep(200_000)
+                let still = axWindows(pid).contains { str($0, kAXTitleAttribute as String) == title }
+                return !still
+            }
+        }
+        return false
+    }
+
     func showApp(_ pid: pid_t) -> Bool {
         let el = appElement(pid)
         let err = AXUIElementSetAttributeValue(el, kAXHiddenAttribute as CFString, kCFBooleanFalse)

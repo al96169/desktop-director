@@ -113,7 +113,7 @@ final class HudWallView: NSView {
         let top: CGFloat = 64
         let avail = NSRect(x: bounds.minX + pad, y: bounds.minY + pad,
                            width: bounds.width - 2 * pad, height: bounds.height - 2 * pad - top)
-        let cols = n <= 1 ? 1 : (n == 2 ? 2 : (n <= 4 ? 2 : 3))
+        let cols = n <= 1 ? 1 : (n == 2 ? 2 : (n == 3 ? 3 : 3))
         let rows = Int(ceil(Double(n) / Double(cols)))
         let gap: CGFloat = 18
         let cw = (avail.width - CGFloat(cols - 1) * gap) / CGFloat(cols)

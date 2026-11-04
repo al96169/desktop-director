@@ -1,5 +1,23 @@
 ﻿# Changelog
 
+## 0.11.0 - 2026-11-04
+
+**演出模式 `ddir stage`**：一条命令把桌面变成导播台，全程 ddir 编排，可重复、可回滚。
+
+- `ddir stage assets [--force]`：本机生成 6 个素材（HTML 仪表盘 / 打字 IDE / 代码 / 环境音 WAV /
+  两个 540×960 H.264 片段）；无 ffmpeg、无下载，素材版本号变更时自动重建
+- `ddir stage run`：清场（隐藏其它 App）→ Mission Control → `claim` 单窗 → 打开 IDE → `claim` 并排 →
+  代码逐字出现 → `claim` 三窗（IDE + 双媒体）→ `hud --wall` 缩略图墙 → `release` + 关窗 + 恢复现场，
+  约 70 秒；`--fast` 冒烟、`--keep` 保留现场
+- `ddir stage rollback`：按 journal 关窗（按 app+title，抗 ref 重映射）、release 全部租约、
+  恢复被隐藏的 App 与档位；幂等，可在任何中断后使用
+- 新增 `ddir play`（AVPlayer 窗口，独立进程，可被 claim 平铺，无 AppleScript/TCC 弹窗）与
+  `ddir web`（无地址栏 WKWebView 窗口）
+- 关键修复：CLI 无 run loop 导致 `NSWorkspace` 看不到新窗口（显式 pump）、AX 关窗 `-25204` 误判为失败、
+  播放器窗口透明（AVPlayerLayer backing layer）、媒体三列出现黑边（改为竖屏素材）、
+  媒体拍次撞 3 租约配额（先 release 再 claim）
+- `mac/test.sh` 42 项；文档新增「演出模式」整节（含 8 个踩坑记录）
+
 ## 0.10.0 - 2026-11-04
 
 **HUD 轻量化 + 体检/提示词/写路径自检**（把 mac 侧能做的收尾）：

@@ -1,5 +1,21 @@
 ﻿# Changelog
 
+## 0.4.0 - 2026-11-04
+
+### 配置：auto 档是否动窗口（默认 off）
+
+- 新增 `~/.ddir/config.ini`：`auto_close = off | minimize | close`，默认 **off（永不自动关窗口）**
+- `auto_close=minimize`：用最小化代替关闭，`ddir auto undo` 会把窗口恢复
+- `auto_close=close`：保留原来的 `WM_CLOSE` 管道（需先武装）
+- `countdown_seconds` 可配（默认 10）
+- `ddir config` / `ddir config auto_close minimize`
+
+### 日志
+
+- `~/.ddir/ddir.log`：每条命令一行（本地时间 + 动作），`ddir log --lines N` 查看
+- 托盘右键新增「查看日志」「自动关闭 ▸ off/minimize/close」
+- 超过 2MB 自动轮转为 `ddir.log.1`
+
 ## 0.3.1 - 2026-11-04
 
 - `auto on` 默认倒计时 30s -> **10s**

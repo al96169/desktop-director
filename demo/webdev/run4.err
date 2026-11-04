@@ -1,0 +1,18 @@
+Traceback (most recent call last):
+  File "F:\desktop-director\demo\webdev\run.py", line 612, in <module>
+    sys.exit(main())
+  File "F:\desktop-director\demo\webdev\run.py", line 604, in main
+    run(args.fast, args.keep)
+  File "F:\desktop-director\demo\webdev\run.py", line 484, in run
+    if ddir("mode", "semi").get("ok") is False:
+  File "F:\desktop-director\demo\webdev\run.py", line 75, in ddir
+    res = sh([DDIR, *args], timeout=timeout)
+  File "F:\desktop-director\demo\webdev\run.py", line 69, in sh
+    return subprocess.run(argv, cwd=str(cwd) if cwd else None, timeout=timeout,
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.9_3.9.3568.0_x64__qbz5n2kfra8p0\lib\subprocess.py", line 505, in run
+    with Popen(*popenargs, **kwargs) as process:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.9_3.9.3568.0_x64__qbz5n2kfra8p0\lib\subprocess.py", line 951, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.9_3.9.3568.0_x64__qbz5n2kfra8p0\lib\subprocess.py", line 1420, in _execute_child
+    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+FileNotFoundError: [WinError 2] 系统找不到指定的文件。

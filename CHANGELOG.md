@@ -1,5 +1,18 @@
 ﻿# Changelog
 
+## 0.6.0 - 2026-11-04
+
+多 Agent 加固（P0 + P1 + P3）：
+
+- **跨进程锁 + 原子写**：`state.lock` 串行化 leases/apps 的读改写，`atomic_write` 先写 tmp 再 rename
+- **心跳**：`ddir heartbeat` 续期自己的租约与软件认领（TTL 300s；claim 也会续期）
+- **优先级**：`--priority low|normal|high|user` 写入租约；高优可抢占低优，条件=对方租约 >60s **且**窗口不在前台；抢占记日志/审计，返回 `preempted` 计数
+- **焦点令牌**：`ddir focus [--seconds N]` / `ddir focus release`；冲突返回 `focus_denied`；`status` 显示 `focus_holder`
+- **越权检测**：托盘每 3s 比对窗口集合，消失且 20s 内无 ddir 关闭记录 → `unmanaged_kill` 审计 + 日志；可选 `downgrade_on_unmanaged_kill=true` 自动降档 semi
+- **display_uid**：显示器标识改为设备名（`\\.\DISPLAY1`），多屏时不再依赖索引
+- **raise 收敛**：只有当没有其他 Agent 持租约时才把窗口提到最前，避免 z-order 打架
+- prompt v1.6：心跳、优先级、焦点令牌、越权规则
+
 ## 0.5.1 - 2026-11-04
 
 - 摆窗口后把窗口提到 z-order 顶部（不抢焦点），paced 演示时能看到逐列铺开

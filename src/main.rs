@@ -275,6 +275,7 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
         return 0;
     }
     let me = win::agent_id();
+    let _lock = store::lock();
     let (_, _, _, active) = activity();
     if active && !has_flag(args, "--force") {
         println!("{{\"ok\":false,\"error\":\"user_active\",\"hint\":\"用户正在操作；等它空闲，或加 --force\"}}");
@@ -285,6 +286,12 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
         println!("{{\"ok\":false,\"error\":\"display_not_managed\",\"hint\":\"没有托管屏\"}}");
         return 0;
     }
+    let prio = arg(args, "--priority").unwrap_or_else(|| "normal".into());
+    if !["low", "normal", "high", "user"].contains(&prio.as_str()) {
+        println!("{{\"ok\":false,\"error\":\"invalid_priority\",\"hint\":\"--priority low|normal|high|user\"}}");
+        return 0;
+    }
+    let mut preempted: Vec<String> = Vec::new();
     let spec = arg(args, "--needs").or_else(|| positional(args).first().cloned()).unwrap_or_default();
     let needs = parse_needs(&spec);
     let now = store::now_unix();
@@ -314,9 +321,18 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
             if targets.iter().any(|(t, _)| t.hwnd == w.hwnd) || w.minimized || !matches(w, &need.name) {
                 continue;
             }
-            if let Some(b) = busy.iter().find(|b| b.window == w.hex) {
-                blocked = Some(b.clone());
-                continue;
+            if let Some(b) = busy.iter().find(|b| b.window == w.hex && !preempted.contains(&b.lease)) {
+                let rank = |p: &str| match p { "user" => 3, "high" => 2, "normal" => 1, _ => 0 };
+                let victim_idle = now.saturating_sub(b.since) > 60;
+                let can_preempt = rank(&prio) > rank(&b.priority) && victim_idle && !w.foreground;
+                if can_preempt {
+                    preempted.push(b.lease.clone());
+                    store::log(&format!("preempt {} {} -> {} (prio {}>{}, age {}s)", w.hex, b.agent, me, prio, b.priority, now.saturating_sub(b.since)));
+                    store::audit("preempt", &format!("{} from {}", w.hex, b.agent));
+                } else {
+                    blocked = Some(b.clone());
+                    continue;
+                }
             }
             chosen = Some(w);
             break;
@@ -373,6 +389,9 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
     let lease_id = format!("ls_{:06x}", (now as u32) ^ std::process::id());
     let mut all: Vec<store::Lease> = Vec::new();
     for l in live.iter() {
+        if preempted.contains(&l.lease) {
+            continue;
+        }
         if l.agent == me {
             if let Some((_, r, _, _)) = plan.iter().find(|(w, _, _, _)| w.hex.eq_ignore_ascii_case(&l.window)) {
                 // refresh the lease, keep its original `from` so release still restores the user's layout
@@ -390,9 +409,10 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
         Some(v) => v == "paced",
         None => present::presentation() == "paced",
     };
+    let raise_ok = !live.iter().any(|l| l.agent != me && l.expires > now);
     let pending = if paced {
         let ops: Vec<(isize, [i32; 4])> = plan.iter().map(|(w, r, _, _)| (w.hwnd, *r)).collect();
-        present::enqueue(&ops)
+        present::enqueue(&ops, raise_ok)
     } else {
         0
     };
@@ -409,6 +429,8 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
                 to: *r,
                 expires: now + LEASE_TTL,
                 lease: lease_id.clone(),
+                priority: prio.clone(),
+                since: now,
             });
         }
     }
@@ -417,9 +439,9 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
     store::audit("claim", &format!("lease={} windows={} retiled={}", lease_id, plan.len(), retiled));
     store::log(&format!("claim lease={} windows={} retiled={}", lease_id, plan.len(), retiled));
     println!(
-        "{{\"ok\":true,\"lease\":\"{}\",\"mode\":\"{}\",\"displays_managed\":[{}],\"assign\":[{}],\"retiled\":{},\"focus\":\"none\",\"ttl_s\":{},\"presentation\":\"{}\",\"pending\":{}}}",
+        "{{\"ok\":true,\"lease\":\"{}\",\"mode\":\"{}\",\"displays_managed\":[{}],\"assign\":[{}],\"retiled\":{},\"focus\":\"none\",\"ttl_s\":{},\"presentation\":\"{}\",\"pending\":{},\"preempted\":{}}}",
         lease_id, esc(&mode), managed_uid_json, assign_json.join(","), retiled, LEASE_TTL,
-        if paced { "paced" } else { "instant" }, pending
+        if paced { "paced" } else { "instant" }, pending, preempted.len()
     );
     0
 }
@@ -540,6 +562,7 @@ fn cmd_own(args: &[String], disown: bool) -> i32 {
     };
     let me = win::agent_id();
     let now = store::now_unix();
+    let _lock = store::lock();
     let mut apps = store::apps();
     let idx = apps.iter().position(|a| a.app.eq_ignore_ascii_case(&app));
     if disown {
@@ -572,6 +595,7 @@ fn cmd_own(args: &[String], disown: bool) -> i32 {
 }
 
 pub fn release_all() -> (usize, usize) {
+    let _lock = store::lock();
     let me = win::agent_id();
     let now = store::now_unix();
     let all = store::leases();
@@ -985,6 +1009,70 @@ fn cmd_demo(args: &[String]) -> i32 {
     println!("{{\"ok\":true,\"opened\":{},\"restored\":{}}}", opened.len(), n);
     0
 }
+fn focus_path() -> std::path::PathBuf { store::home().join("focus.tsv") }
+
+fn focus_holder() -> Option<(String, u64)> {
+    let txt = std::fs::read_to_string(focus_path()).ok()?;
+    let f: Vec<&str> = txt.trim().split('\t').collect();
+    if f.len() < 2 { return None; }
+    Some((f[0].to_string(), f[1].parse().unwrap_or(0)))
+}
+
+fn cmd_heartbeat() -> i32 {
+    let me = win::agent_id();
+    let now = store::now_unix();
+    let _g = store::lock();
+    let mut leases = store::leases();
+    let mut n = 0;
+    for l in leases.iter_mut() {
+        if l.agent == me && l.expires > now {
+            l.expires = now + LEASE_TTL;
+            n += 1;
+        }
+    }
+    store::save_leases(&leases);
+    let mut apps = store::apps();
+    let mut na = 0;
+    for a in apps.iter_mut() {
+        if a.owner == me {
+            a.since = now;
+            na += 1;
+        }
+    }
+    store::save_apps(&apps);
+    store::log(&format!("heartbeat leases={} apps={}", n, na));
+    println!("{{\"ok\":true,\"renewed\":{},\"apps\":{},\"ttl_s\":{}}}", n, na, LEASE_TTL);
+    0
+}
+
+fn cmd_focus(args: &[String]) -> i32 {
+    let me = win::agent_id();
+    let now = store::now_unix();
+    let sub = args.first().cloned().unwrap_or_else(|| "acquire".into());
+    if sub == "release" {
+        if let Some((h, _)) = focus_holder() {
+            if h == me {
+                let _ = std::fs::remove_file(focus_path());
+                store::log("focus released");
+                println!("{{\"ok\":true,\"holder\":null}}");
+                return 0;
+            }
+        }
+        println!("{{\"ok\":false,\"error\":\"not_holder\"}}");
+        return 0;
+    }
+    if let Some((h, exp)) = focus_holder() {
+        if h != me && exp > now {
+            println!("{{\"ok\":false,\"error\":\"focus_denied\",\"holder\":\"{}\",\"expires_in_s\":{}}}", esc(&h), exp - now);
+            return 0;
+        }
+    }
+    let ttl: u64 = arg(args, "--seconds").and_then(|s| s.parse().ok()).unwrap_or(120);
+    let _ = std::fs::write(focus_path(), format!("{}\t{}\n", me, now + ttl));
+    store::log(&format!("focus acquired ttl={}", ttl));
+    println!("{{\"ok\":true,\"holder\":\"{}\",\"ttl_s\":{}}}", esc(&me), ttl);
+    0
+}
 fn cmd_board() -> i32 {
     let me = win::agent_id();
     let now = store::now_unix();
@@ -997,7 +1085,14 @@ fn cmd_board() -> i32 {
         println!("== no lease");
     } else {
         for l in &live {
-            println!("== lease {}  {}  {}  expires_in {}s", l.lease, l.agent, l.window, l.expires.saturating_sub(now));
+            println!("== lease {}  {}  {}  {}  expires_in {}s", l.lease, l.agent, l.window, l.priority, l.expires.saturating_sub(now));
+        }
+        let mut agents: Vec<&str> = live.iter().map(|l| l.agent.as_str()).collect();
+        agents.sort();
+        agents.dedup();
+        for a in agents {
+            let n = live.iter().filter(|l| l.agent == a).count();
+            println!("== agent {}  leases={}", a, n);
         }
     }
     for a in store::apps() {
@@ -1080,6 +1175,8 @@ fn main() {
         "auto" => cmd_auto(rest),
         "config" => cmd_config(rest),
         "flush" => cmd_flush(),
+        "heartbeat" | "hb" => cmd_heartbeat(),
+        "focus" => cmd_focus(rest),
         "demo" => cmd_demo(rest),
         "log" | "logs" => cmd_log(rest),
         "version" | "--version" | "-V" => {

@@ -2,5 +2,7 @@
   "name": "ddir-webdev-demo-pw",
   "private": true,
   "type": "module",
-  "dependencies": { "playwright-core": "^1.49.0" }
+  "dependencies": {
+    "playwright-core": "^1.49.0"
+  }
 }

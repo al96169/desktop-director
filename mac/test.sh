@@ -112,6 +112,14 @@ OWNED=$("$DDIR" claim --needs "a.txt" --force >/dev/null; "$DDIR" list --text | 
 check "close needs own" "$("$DDIR" close --window "$OWNED" | json 'd["error"]')" "not_owned"
 "$DDIR" release >/dev/null
 
+# 8. tray wiring (read-only: builds the NSMenu tree, does not start the agent)
+TRAY="$("$DDIR" tray --check)"
+check "tray --check ok" "$(echo "$TRAY" | json 'd["ok"]')" "True"
+check "tray menu has 模式" "$(echo "$TRAY" | json 'any(i.get("title")=="模式" for i in d["menu"])')" "True"
+check "tray menu has 全部还原" "$(echo "$TRAY" | json 'any(i.get("title","").startswith("全部还原") for i in d["menu"])')" "True"
+check "tray menu has 退出" "$(echo "$TRAY" | json 'any(i.get("title")=="退出" for i in d["menu"])')" "True"
+check "autostart reports state" "$("$DDIR" autostart status | json 'isinstance(d["enabled"], bool) and d["plist"].endswith(".plist")')" "True"
+
 # cleanup: close only the windows this script opened
 "$DDIR" own --app TextEdit >/dev/null 2>&1
 for t in a.txt b.txt; do

@@ -35,10 +35,8 @@ case "heartbeat", "hb": code = cmdHeartbeat()
 case "focus": code = cmdFocus(rest)
 case "demo": code = cmdDemo()
 case "log", "logs": code = cmdLog(rest)
-case "tray":
-    emit("{\"ok\":false,\"error\":\"unsupported_on_platform\",\"hint\":\"macOS 托盘还没做：用 ddir mode 切档，M6 再做 NSStatusItem\"}")
-case "autostart":
-    emit("{\"ok\":false,\"error\":\"unsupported_on_platform\",\"hint\":\"macOS 开机自启要用 LaunchAgent plist，尚未实现\"}")
+case "tray": code = cmdTray(rest)
+case "autostart": code = cmdAutostart(rest)
 case "version", "--version", "-v", "-V":
     print("ddir \(VERSION) (macos)")
 case "help", "--help", "-h":

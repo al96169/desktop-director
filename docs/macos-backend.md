@@ -16,11 +16,38 @@
 | `heartbeat` / `focus` / `config` / `log` / `board` / `flush` | ✅ 与 Windows 同一份文件语义 |
 | `auto status|plan|on|close|undo` | ✅ 基于 TextEdit/Finder 实测；`auto_close=off` 仍是默认 |
 | `demo` | ✅ TextEdit 版（自己开、自己关） |
-| 托盘 / 开机自启 | ❌ 返回 `unsupported_on_platform`（M6） |
+| `tray`（NSStatusItem：三档/还原/auto_close/窗口/托管屏/日志/自启/退出） | ✅ 菜单栏常驻，3s tick 消费 `paced` 队列 + 越权关闭检测 |
+| `autostart`（LaunchAgent） | ✅ `on/off/status`，`launchctl bootstrap/bootout` |
 | HUD（缩略图墙/暗化/入场动画） | ❌ 未做；需要 ScreenCaptureKit + 屏幕录制授权 |
 | 托管屏"借用"、热插拔回滚 | ❌ 未做（与 Windows 同步的欠账） |
 
-## 2. 构建 / 安装 / 自测
+## 2. 托盘与开机自启
+
+```bash
+ddir tray                # 菜单栏图标（◐ semi / ● auto / ○ off），单实例（flock）
+ddir tray --check        # 不启动常驻进程，只把 NSMenu 树打成 JSON（给测试/自动化用）
+ddir autostart on|off|status   # ~/Library/LaunchAgents/com.ddir.mac.tray.plist
+```
+
+菜单：`状态行` / `模式 ▸ off·semi·auto` / `全部还原（所有人）` / `自动关闭 ▸ off·minimize·close` /
+`窗口列表 ▸`（点一条即 raise + 激活）/ `托管屏 ▸`（勾选=托管）/ `查看日志` / `打开状态目录` /
+`开机自启`（勾）/ `退出`（⌘Q）。图标旁一直显示当前档位，动作后短暂显示 `还原 N` / `auto:close` 之类的反馈。
+
+设计要点：
+
+- **托盘代表人，不代表某个 Agent**：`全部还原` 用 `releaseAll(force: true)` 恢复**所有 Agent** 的活跃租约；
+  CLI 的 `ddir release` 仍然只释放自己的（D22）。托盘进程的身份与 CLI 的宿主进程无关，若按身份过滤，
+  按钮会变成空操作（下一个坑已踩过）。
+- **单实例**：`~/.ddir/tray.lock` 上加 `flock(LOCK_EX|LOCK_NB)`，进程退出内核自动释放；
+  第二个实例返回 `{"ok":false,"error":"already_running"}`，不弹窗。
+- **3s tick**：消费 `presentation=paced` 队列（实测：claim 入队后不调用 `flush`，托盘在 3s 内把窗口摆好）、
+  跑 `unmanaged_kill` 检测（窗口消失且无 20s 内 close 审计 → 记审计；`downgrade_on_unmanaged_kill=true` 时降 semi）。
+- **开机自启**是 `~/Library/LaunchAgents/com.ddir.mac.tray.plist`（`RunAtLoad`，`launchctl bootstrap gui/$UID`），
+  不是 `loginwindow` 脚本；首次开启时 macOS 会弹「后台项目已添加」，属正常。关掉 = `bootout` + 删 plist。
+- LaunchAgent 启动的进程同样拿到辅助功能授权（实测 `accessibility=true`，能看到 8 个窗口）：
+  TCC 认签名身份，不认启动方式。
+
+## 3. 构建 / 安装 / 自测
 
 ```bash
 cd ~/desktop-director
@@ -35,7 +62,7 @@ cd ~/desktop-director
 * 命令入口：`~/.local/bin/ddir` → `exec ~/Applications/Ddir.app/Contents/MacOS/Ddir "$@"`。
 * 只读命令（`list`/`displays`/`status`/`selftest`）在未授权时仍可用；所有写命令返回 `permission_required`。
 
-## 3. 平台事实（实测，别再试错）
+## 4. 平台事实（实测，别再试错）
 
 | 事实 | 细节 |
 |---|---|
@@ -52,7 +79,7 @@ cd ~/desktop-director
 | 授权归属 | TCC 辅助功能按**签名身份**判定：同一签名二进制即使被拷到 `/tmp` 仍 `accessibility=true`（实测）；屏幕录制当前 `false`，做 HUD 前要重新勾选 `Ddir` |
 | 显示器 | `NSScreen`（左下原点）→ CG（左上原点）换算 `y = mainHeight - (y + h)`；`work` 取 `visibleFrame`（菜单栏 25pt、Dock 已扣除）|
 
-## 4. 与 Windows 版的差异（协议已表达，别当成 bug）
+## 5. 与 Windows 版的差异（协议已表达，别当成 bug）
 
 | 项 | Windows | macOS |
 |---|---|---|
@@ -61,13 +88,13 @@ cd ~/desktop-director
 | `close` 后进程 | 通常退出 | 一定存活 |
 | `class` 字段 | Win32 类名 | AX subrole（`AXStandardWindow` 等）|
 | `dpi` | 96/120/144… | `72 × backingScaleFactor`（Retina 144），另有 `scale` 字段 |
-| 托盘 / 自启 | Rust 原生托盘 | 未实现（`unsupported_on_platform`）|
+| 托盘 / 自启 | Rust 原生托盘 + HKCU Run | NSStatusItem + LaunchAgent |
 | `auto` 的候选过滤 | explorer / 前台 / 已认领 | Finder / 前台 / 已认领 |
 | `demo` | notepad | TextEdit |
 
 JSON 里额外提供了 `actual`（move 后的读回值）、`hidden`、`pid`、`scale`、`process_alive` 等字段；只增不改，Windows 客户端可忽略。
 
-## 5. 已知边界
+## 6. 已知边界
 
 1. **AX 只对"有窗口的 app"有效**：菜单栏常驻 / 后台进程没有窗口，`list` 看不到（与 Alt-Tab 一致）。
 2. **同一文档开两个窗口**时标题与几何可能完全相同；现在靠 CGWindowNumber 唯一性区分，`close` 一次只关一个。
@@ -75,11 +102,15 @@ JSON 里额外提供了 `actual`（move 后的读回值）、`hidden`、`pid`、
    在真实弹保存面板的 app 上会正常返回。
 4. **`hide` 的应用级语义**意味着"藏一个窗口"在 macOS 上做不到；`release` 会把该应用所有隐藏窗口一起恢复。
 5. **不动用户的屏**：单屏时按 D15 回退为"托管这块屏"，`claim` 仍会避开前台窗口与用户活跃时段（`user_active`）。
-6. **未做 HUD/托盘/借用屏**，命令直接返回 `unsupported_on_platform`，不静默成功。
+6. **HUD 未做**：需要屏幕录制授权（当前 `screen_recording=false`），先补授权再上 ScreenCaptureKit。
+7. **`tray` 必须跑在 GUI 会话里**（`launchctl` 的 gui/$UID 域）。SSH 里直接 `ddir tray` 能起来但图标不显示，
+   因为不在同一个 session；排障时用 `launchctl print gui/$(id -u)/com.ddir.mac.tray` 看状态。
+8. **Windows 的托盘 `全部还原` 有同样的身份问题**（`src/tray.rs` 调 `release_all()`，只释放托盘进程自己的租约）。
+   macOS 侧已用 `force: true` 修正；Windows 侧待确认/修复。
 
-## 6. 下一步（按优先级）
+## 7. 下一步（按优先级）
 
 1. HUD：ScreenCaptureKit 抓窗 → 缩略图墙 + 暗化 + 入场动画（先补屏幕录制授权）。
-2. 托盘：`NSStatusItem` 三档切换 + 全部还原 + 日志 + 自启（`LaunchAgent` plist）。
-3. 借用屏 / 热插拔回滚（与 Windows 同步欠账）。
-4. 软件所有权到进程级（当前粒度是应用名）。
+2. 借用屏 / 热插拔回滚（与 Windows 同步欠账）。
+3. 软件所有权到进程级（当前粒度是应用名）。
+4. 托盘补充：显示"最近接管/关闭"历史、auto 武装倒计时状态；Windows 侧 `release_all` 同款修复。

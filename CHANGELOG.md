@@ -1,5 +1,22 @@
 ﻿# Changelog
 
+## 0.8.0 - 2026-11-04
+
+**macOS 托盘 + 开机自启**（补齐阶段 2 的用户控制面）：
+
+- `ddir tray`：菜单栏常驻（`NSStatusItem`），图标旁常显档位（◐ semi / ● auto / ○ off）；
+  菜单 = 状态 / 模式（off·semi·auto）/ 全部还原 / 自动关闭（off·minimize·close）/ 窗口列表（点击 raise+激活）/
+  托管屏（勾选托管）/ 查看日志 / 打开状态目录 / 开机自启 / 退出
+- `ddir tray --check`：不启动常驻进程，把 NSMenu 树打成 JSON（测试用）
+- 单实例：`flock` 锁 `~/.ddir/tray.lock`；第二个实例返回 `already_running`，不弹窗
+- 3s tick：消费 `paced` 演示队列 + `unmanaged_kill` 检测（沿用 D9 语义）
+- **全部还原 = 所有人**：托盘代表人，`releaseAll(force: true)` 恢复所有 Agent 的活跃租约；
+  CLI `ddir release` 仍只释放自己的（D22）。托盘进程身份与 CLI 无关，按身份过滤会让按钮变成空操作
+- `ddir autostart on|off|status`：`~/Library/LaunchAgents/com.ddir.mac.tray.plist` +
+  `launchctl bootstrap/bootout gui/$UID`；实测 LaunchAgent 启动的进程同样 `accessibility=true`
+- `mac/test.sh` 扩到 20 项（含托盘菜单接线检查）
+- 已知问题：Windows `src/tray.rs` 的 `release_all()` 同样只释放托盘自身租约，待修
+
 ## 0.7.3 - 2026-11-04
 
 **macOS 后端落地**（Swift 6 + Accessibility API，`mac/`）：

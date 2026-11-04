@@ -107,6 +107,24 @@ func cmdMode(_ args: [String]) -> Int32 {
 
 // MARK: - displays
 
+/// Resolve the config value ("all" / "all_except_primary" / "none" / uid list) into concrete uids.
+func concreteManagedUIDs() -> [String] {
+    let ds = win.displays()
+    let cfg = store.configGet("managed_displays") ?? "all_except_primary"
+    if cfg == "none" { return [] }
+    if cfg == "all" { return ds.map { $0.uid } }
+    if cfg == "all_except_primary" { return ds.filter { $0.managed }.map { $0.uid } }
+    return cfg.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+}
+
+@discardableResult
+func applyManagedUIDs(_ uids: [String]) -> String {
+    let value = uids.isEmpty ? "none" : uids.joined(separator: ",")
+    _ = store.configSet("managed_displays", value)
+    store.log("managed_displays -> \(value)")
+    return value
+}
+
 func cmdDisplays(_ args: [String]) -> Int32 {
     if let target = argValue(args, "--manage") {
         let on = !hasFlag(args, "--off")
@@ -115,24 +133,14 @@ func cmdDisplays(_ args: [String]) -> Int32 {
             emit("{\"ok\":false,\"error\":\"no_such_display\",\"hint\":\"看到 ddir displays 里的 uid/gdi\"}")
             return 0
         }
-        var list: [String] = (store.configGet("managed_displays") ?? "all_except_primary")
-            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        if list.count == 1 && (list[0] == "all" || list[0] == "all_except_primary") {
-            list = ds.filter { $0.managed }.map { $0.uid }
-        }
-        list.removeAll { $0 == "none" }
+        var list = concreteManagedUIDs()
         if on {
             if !list.contains(hit.uid) { list.append(hit.uid) }
         } else {
             list.removeAll { $0 == hit.uid || $0 == hit.gdi }
         }
-        let value = list.isEmpty ? "none" : list.joined(separator: ",")
-        if let err = store.configSet("managed_displays", value) {
-            emit("{\"ok\":false,\"error\":\"\(es(err))\"}")
-        } else {
-            store.log("managed_displays -> \(value)")
-            emit("{\"ok\":true,\"managed_displays\":\"\(es(value))\"}")
-        }
+        let value = applyManagedUIDs(list)
+        emit("{\"ok\":true,\"managed_displays\":\"\(es(value))\"}")
         return 0
     }
     let ds = win.displays()
@@ -501,16 +509,22 @@ func cmdOwn(_ args: [String], disown: Bool) -> Int32 {
 
 // MARK: - release / heartbeat / focus
 
-func releaseAll() -> (Int, Int) {
+/// Restore leases.
+/// - `force: false` (CLI `ddir release`) restores only *my* live leases (D22: agents never
+///   release somebody else's windows).
+/// - `force: true` (tray menu, human pressed "全部还原") restores every live lease: the user
+///   outranks all agents, and the tray's own process identity is unrelated to theirs.
+func releaseAll(force: Bool = false) -> (Int, Int) {
     let lock = store.lock()
     defer { _ = lock }
     let me = win.agentId()
     let now = nowUnix()
     let all = store.leases()
-    let mine = all.filter { $0.agent == me && $0.expires > now }
-    let others = all.filter { !($0.agent == me && $0.expires > now) }
+    let live = all.filter { $0.expires > now }
+    let targets = live.filter { force || $0.agent == me }
+    let others = all.filter { l in !targets.contains(where: { $0.lease == l.lease && $0.window == l.window }) }
     var n = 0
-    for l in mine {
+    for l in targets {
         guard let r = win.parseRef(l.window) else { continue }
         win.invalidateCG()
         if l.action == "hide" {
@@ -520,8 +534,8 @@ func releaseAll() -> (Int, Int) {
         }
     }
     store.saveLeases(others)
-    store.audit("release", "restored=\(n)")
-    store.log("release restored=\(n)")
+    store.audit("release", "restored=\(n) forced=\(force)")
+    store.log("release restored=\(n) forced=\(force) kept=\(others.count)")
     return (n, others.count)
 }
 
@@ -821,6 +835,21 @@ func cmdAuto(_ args: [String]) -> Int32 {
     return 0
 }
 
+// MARK: - autostart (LaunchAgent)
+
+func cmdAutostart(_ args: [String]) -> Int32 {
+    let action = args.first ?? "status"
+    switch action {
+    case "on":
+        emit("{\"ok\":true,\"enabled\":\(Autostart.set(true)),\"plist\":\"\(es(Autostart.plistPath))\"}")
+    case "off":
+        emit("{\"ok\":true,\"enabled\":\(Autostart.set(false)),\"plist\":\"\(es(Autostart.plistPath))\"}")
+    default:
+        emit("{\"ok\":true,\"enabled\":\(Autostart.on()),\"plist\":\"\(es(Autostart.plistPath))\"}")
+    }
+    return 0
+}
+
 // MARK: - board / selftest / demo / help
 
 func cmdBoard() -> Int32 {
@@ -946,6 +975,8 @@ func usage() {
     print("  ddir log [--lines N]                   tail ~/.ddir/ddir.log")
     print("  ddir flush                             drain the paced presentation queue")
     print("  ddir demo                              scripted demo (TextEdit windows)")
+    print("  ddir tray [--check]                    menu bar app (modes/restore/log/displays/autostart)")
+    print("  ddir autostart [on|off|status]         run tray at login (LaunchAgent)")
     print("  ddir board                             human readable overview")
     print("  ddir selftest                          platform conformance checks (7)")
     print()

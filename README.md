@@ -19,7 +19,7 @@
 | 已完成 | 未完成 |
 |---|---|
 | Windows 后端（枚举/并排/隐藏/还原） | Linux 后端（只有设计） |
-| **macOS 后端**（AX：枚举/并排/隐藏/关闭/空闲，`selftest` 7/7） | macOS 托盘 / HUD / 开机自启 |
+| **macOS 后端**（AX：枚举/并排/隐藏/关闭/空闲 + 菜单栏托盘 + LaunchAgent 自启） | macOS HUD |
 | 租约排他 + 文件锁 + 心跳 + 优先级抢占 + 焦点令牌 | 托管屏"借用"与热插拔回滚 |
 | 软件认领 + 只关自己 + `auto undo` | 软件所有权到进程级 |
 | auto 10s 武装 + 默认 `auto_close=off` | HUD（缩略图墙/暗化） |
@@ -63,7 +63,9 @@ ddir displays           # 哪块屏归 Agent（单屏时按 D15 托管这块屏�
 ddir list --text        # 窗口列表；window 形如 75098:7449
 ddir claim --needs "a.txt,b.txt" --force   # 等宽并排
 ddir release            # 还原
-./mac/test.sh           # 15 项验收（只用 TextEdit 和它自己开的窗口）
+ddir tray               # 菜单栏常驻（三档/全部还原/日志/托管屏/自启）
+ddir autostart on       # 登录时自动起托盘（LaunchAgent）
+./mac/test.sh           # 20 项验收（只用 TextEdit 和它自己开的窗口）
 ```
 
 macOS 的权限与平台差异（`hide` 只能整应用、`close` 不退进程、window-id 不是 hwnd）见

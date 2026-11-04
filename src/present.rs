@@ -31,7 +31,7 @@ pub fn presentation() -> String {
 }
 
 /// Enqueue geometry changes; they will be applied at `step_ms` intervals.
-pub fn enqueue(ops: &[(isize, [i32; 4])]) -> usize {
+pub fn enqueue(ops: &[(isize, [i32; 4])], raise: bool) -> usize {
     let _ = fs::create_dir_all(queue_dir());
     let base = now_ms();
     let step = step_ms();
@@ -39,7 +39,7 @@ pub fn enqueue(ops: &[(isize, [i32; 4])]) -> usize {
     for (i, (hwnd, r)) in ops.iter().enumerate() {
         let due = base + (i as u64 + 1) * step;
         let name = format!("{}-{}-{}.op", due, pid, i);
-        let body = format!("{}\t{}\t{}\t{}\t{}\n", hwnd, r[0], r[1], r[2], r[3]);
+        let body = format!("{}\t{}\t{}\t{}\t{}\t{}\n", hwnd, r[0], r[1], r[2], r[3], if raise { 1 } else { 0 });
         let _ = fs::write(queue_dir().join(name), body);
     }
     store::log(&format!("present: queued {} ops (step={}ms)", ops.len(), step));
@@ -55,9 +55,12 @@ fn apply_one(path: &PathBuf) -> bool {
     }
     let hwnd = f[0].parse::<isize>().unwrap_or(0);
     let r: Vec<i32> = f[1..5].iter().filter_map(|s| s.parse().ok()).collect();
+    let raise = f.get(5).map(|v| *v == "1").unwrap_or(false);
     if hwnd != 0 && r.len() == 4 {
         win::set_rect(hwnd, [r[0], r[1], r[2], r[3]]);
-        win::raise_noactivate(hwnd);
+        if raise {
+            win::raise_noactivate(hwnd);
+        }
     }
     let _ = fs::remove_file(path);
     true

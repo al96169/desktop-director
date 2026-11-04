@@ -1,0 +1,7 @@
+[01:40:55] demo start · work=C:\Users\54705\ddir-webdev-demo · platform=win32
+[01:40:58] create-vite rc=0
+[01:40:59] npm install rc=0
+[01:40:59] copy app overlay rc=1
+[01:40:59] window powershell · 管理员: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.e · 0x02F9127E
+[01:40:59] terminal: npm create vite … npm install … npm run dev
+[01:42:31] dev server did not come up — check the terminal

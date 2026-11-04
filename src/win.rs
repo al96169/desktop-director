@@ -304,10 +304,30 @@ pub fn displays() -> Vec<Display> {
             managed: false,
         });
     }
-    // policy: >=2 displays -> all but primary; single display -> manage it
+    // managed set comes from config: "all" | "all_except_primary" | comma separated uids
+    let cfg = crate::store::config_get("managed_displays").unwrap_or_else(|| "all_except_primary".into());
     let single = result.len() <= 1;
+    let list: Vec<String> = cfg.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
     for d in result.iter_mut() {
-        d.managed = single || !d.primary;
+        d.managed = if cfg == "all" {
+            true
+        } else if cfg == "all_except_primary" {
+            single || !d.primary
+        } else {
+            list.iter().any(|u| u == &d.uid || u == &d.gdi)
+        };
+    }
+    // explicit "none" means the user turned everything off; otherwise fall back so semi stays usable
+    if cfg == "none" {
+        for d in result.iter_mut() {
+            d.managed = false;
+        }
+        return result;
+    }
+    if !result.iter().any(|d| d.managed) {
+        for d in result.iter_mut() {
+            d.managed = single || !d.primary;
+        }
     }
     result
 }

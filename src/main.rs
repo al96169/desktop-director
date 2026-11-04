@@ -683,19 +683,42 @@ fn cmd_auto(args: &[String]) -> i32 {
             );
         }
         "on" => {
-            let secs: u64 = arg(args, "--seconds").and_then(|s| s.parse().ok()).unwrap_or(30);
+            let start_mode = store::mode();
+            if start_mode != "auto" {
+                println!("{{\"ok\":false,\"error\":\"mode_not_auto\",\"hint\":\"先 ddir mode auto（或托盘切到全自动）再武装\"}}");
+                return 0;
+            }
+            let secs: u64 = arg(args, "--seconds").and_then(|s| s.parse().ok()).unwrap_or(10);
             let cs = candidates(None);
             let names: Vec<String> = cs.iter().map(|c| format!("{}({}窗口)", c.app, c.windows)).collect();
-            println!("== 将接管（不关闭只是候选）");
+            println!("== 将接管（只是候选，不会立刻关闭）");
             println!("   {}", if names.is_empty() { "（没有候选）".to_string() } else { names.join("、") });
-            println!("== 保护");
-            println!("   被 Agent 认领的软件 / 前台软件 / explorer / ddir 自身");
-            println!("== 倒计时 {} 秒，Ctrl+C 取消", secs);
+            println!("== 保护：被 Agent 认领 / 前台软件 / explorer / ddir 自身");
+            println!("== 倒计时 {} 秒；期间随时切回 semi/off（托盘或 ddir mode）即可取消", secs);
             for i in (1..=secs).rev() {
+                if store::mode() != "auto" {
+                    store::audit("auto_abort", "mode switched during countdown");
+                    println!("\n已取消武装：模式已切回 {}", store::mode());
+                    println!("{{\"ok\":false,\"error\":\"aborted\",\"mode\":\"{}\"}}", store::mode());
+                    return 0;
+                }
                 print!("\r  {} 秒 ", i);
                 use std::io::Write;
                 let _ = std::io::stdout().flush();
-                std::thread::sleep(std::time::Duration::from_secs(1));
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                if store::mode() != "auto" {
+                    store::audit("auto_abort", "mode switched during countdown");
+                    println!("\n已取消武装：模式已切回 {}", store::mode());
+                    println!("{{\"ok\":false,\"error\":\"aborted\",\"mode\":\"{}\"}}", store::mode());
+                    return 0;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(750));
+            }
+            if store::mode() != "auto" {
+                store::audit("auto_abort", "mode switched during countdown");
+                println!("\n已取消武装：模式已切回 {}", store::mode());
+                println!("{{\"ok\":false,\"error\":\"aborted\",\"mode\":\"{}\"}}", store::mode());
+                return 0;
             }
             arm();
             store::audit("auto_arm", &format!("seconds={} candidates={}", secs, cs.len()));

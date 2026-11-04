@@ -1,5 +1,14 @@
 ﻿# Changelog
 
+## 0.8.0 - 2026-11-04
+
+- **DPI 感知**：启动时设 Per-Monitor V2，混合 DPI 下窗口坐标不再被虚拟化
+- **托盘「屏幕」子菜单**：每块屏一个勾选项，点一下即切换托管（等价 `ddir displays --manage`）；处理 `WM_DISPLAYCHANGE`
+- **`ddir doctor`**：9 项诊断（状态目录/mode/配置/租约/锁/队列/显示/日志/托盘），输出 PASS/WARN/FAIL，有 FAIL 时退出码 1
+- **进程级软件所有权**：`ddir own --pid <PID>`，`close` 同时认应用名和 `pid:<PID>`；两个 Chrome 实例可以各归一个 Agent
+- **`list` 输出 pid**
+- **集成测试** `tests/integration.ps1`：20 项断言（claim 并排/等宽/不重叠、hide 记租约、release 还原、own --pid + close 拒绝未认领、doctor），本机 20/20 通过
+
 ## 0.7.2 - 2026-11-04
 
 - 提示词 v1.7：去掉硬编码路径，补齐 heartbeat / priority / focus / config / log / displays --manage / flush / demo / tray

@@ -1,5 +1,13 @@
 ﻿# Changelog
 
+## 0.7.0 - 2026-11-04
+
+- 多屏托管：`managed_displays` 配置（`all` / `all_except_primary` / `none` / 逗号分隔的 uid）
+- `ddir displays --manage <uid|gdi|primary> [--off]` 增删托管屏；关闭全部后 claim 返回 `display_not_managed`
+- 显示器 uid 使用设备名（`\\.\DISPLAY1`），重启/热插拔后仍可识别
+- 新增 `docs/company-onboarding.md`：公司电脑 10 分钟上手清单（含 SmartScreen、回滚、排障）
+- 注意：per-display「借用/热插拔回滚」仍未实现
+
 ## 0.6.0 - 2026-11-04
 
 多 Agent 加固（P0 + P1 + P3）：

@@ -172,7 +172,38 @@ fn cmd_mode(args: &[String]) -> i32 {
     0
 }
 
-fn cmd_displays() -> i32 {
+fn cmd_displays(args: &[String]) -> i32 {
+    if let Some(target) = arg(args, "--manage") {
+        let on = !has_flag(args, "--off");
+        let ds = win::displays();
+        let hit = ds.iter().find(|d| d.uid == target || d.gdi == target || target == "primary" && d.primary);
+        if hit.is_none() {
+            println!("{{\"ok\":false,\"error\":\"no_such_display\",\"hint\":\"看到 ddir displays 里的 uid/gdi\"}}");
+            return 0;
+        }
+        let hit = hit.unwrap();
+        let mut list: Vec<String> = crate::store::config_get("managed_displays")
+            .unwrap_or_else(|| "all_except_primary".into())
+            .split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+        if list.len() == 1 && (list[0] == "all" || list[0] == "all_except_primary") {
+            list = ds.iter().filter(|d| d.managed).map(|d| d.uid.clone()).collect();
+        }
+        list.retain(|u| u != "none");
+        if on {
+            if !list.iter().any(|u| u == &hit.uid) { list.push(hit.uid.clone()); }
+        } else {
+            list.retain(|u| u != &hit.uid && u != &hit.gdi);
+        }
+        let value = if list.is_empty() { "none".to_string() } else { list.join(",") };
+        match crate::store::config_set("managed_displays", &value) {
+            Ok(_) => {
+                store::log(&format!("managed_displays -> {}", value));
+                println!("{{\"ok\":true,\"managed_displays\":\"{}\"}}", esc(&value));
+            }
+            Err(e) => println!("{{\"ok\":false,\"error\":\"{}\"}}", esc(&e)),
+        }
+        return 0;
+    }
     let ds = win::displays();
     let managed: Vec<Display> = ds.iter().filter(|d| d.managed).cloned().collect();
     let user: Vec<Display> = ds.iter().filter(|d| !d.managed).cloned().collect();
@@ -1156,7 +1187,7 @@ fn main() {
     let rest = &args[1..];
     let code = match cmd.as_str() {
         "mode" => cmd_mode(rest),
-        "displays" => cmd_displays(),
+        "displays" => cmd_displays(rest),
         "list" => cmd_list(rest),
         "status" => cmd_status(),
         "plan" => cmd_claim(rest, true),

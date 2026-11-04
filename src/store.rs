@@ -236,6 +236,7 @@ pub fn config_set(key: &str, value: &str) -> Result<(), String> {
                 return Err("presentation must be instant|paced".into());
             }
         }
+        "managed_displays" => { /* any string accepted */ }
         "downgrade_on_unmanaged_kill" => {
             if !["true", "false"].contains(&value) {
                 return Err("downgrade_on_unmanaged_kill must be true|false".into());

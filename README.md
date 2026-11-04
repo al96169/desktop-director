@@ -18,6 +18,7 @@
 
 **给屏幕和软件发租约**：谁要用哪块屏、哪个窗口、哪个软件，先向 `ddir` 申请；拿不到就换方案，而不是互相抢。用户永远是最高优先级，且可以物理隔离（把几块屏收回来自己用）。
 
+> 公司电脑上手清单：[docs/company-onboarding.md](docs/company-onboarding.md)
 ## 快速开始（Windows x64）
 
 ```powershell

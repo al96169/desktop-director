@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "F:\desktop-director\demo\webdev\run.py", line 657, in <module>
+    sys.exit(main())
+  File "F:\desktop-director\demo\webdev\run.py", line 649, in main
+    run(args.fast, args.keep)
+  File "F:\desktop-director\demo\webdev\run.py", line 535, in run
+    term = open_terminal()
+  File "F:\desktop-director\demo\webdev\run.py", line 286, in open_terminal
+    shutil.copytree(item, dst, dirs_exist_ok=True)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.9_3.9.3568.0_x64__qbz5n2kfra8p0\lib\shutil.py", line 568, in copytree
+    return _copytree(entries=entries, src=src, dst=dst, symlinks=symlinks,
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.9_3.9.3568.0_x64__qbz5n2kfra8p0\lib\shutil.py", line 522, in _copytree
+    raise Error(errors)
+shutil.Error: [('F:\\desktop-director\\demo\\webdev\\app\\public\\design\\mock-dashboard.png', 'C:\\Users\\54705\\ddir-webdev-demo\\shop-web\\public\\design\\mock-dashboard.png', "[Errno 22] Invalid argument: 'C:\\\\Users\\\\54705\\\\ddir-webdev-demo\\\\shop-web\\\\public\\\\design\\\\mock-dashboard.png'"), ('F:\\desktop-director\\demo\\webdev\\app\\public\\design\\mock-mobile.png', 'C:\\Users\\54705\\ddir-webdev-demo\\shop-web\\public\\design\\mock-mobile.png', "[Errno 22] Invalid argument: 'C:\\\\Users\\\\54705\\\\ddir-webdev-demo\\\\shop-web\\\\public\\\\design\\\\mock-mobile.png'")]

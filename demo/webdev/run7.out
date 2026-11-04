@@ -1,0 +1,14 @@
+[01:45:15] demo start · work=C:\Users\54705\ddir-webdev-demo · platform=win32
+[01:45:17] create-vite rc=0
+[01:45:17] scaffold files: ['.gitignore', '.vscode', 'README.md', 'index.html', 'package.json', 'public', 'src', 'tsconfig.app.json', 'tsconfig.json', 'tsconfig.node.json', 'vite.config.ts']
+[01:45:24] npm install rc=0
+[01:45:24] copy app overlay rc=3
+[01:45:24] window powershell · 管理员: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.e · 0x00091E30
+[01:45:24] terminal: npm create vite … npm install … npm run dev
+[01:45:26] dev server ready
+[01:45:26] tile 4 -> 462px columns
+[01:45:32] tile 2 -> 939px columns
+[01:45:35] writing FeatureBanner.vue (925 bytes) — Vite HMR updates the page live
+[01:45:39] window Code · Visual Studio Code · 0x00B41646
+[01:45:42] tile 2 -> 939px columns
+[01:45:50] tile 3 -> 621px columns

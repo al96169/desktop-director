@@ -1,6 +1,6 @@
 ﻿# Desktop Director（ddir）— 窗口编排规矩
 
-> 安装版（v1.4，2026-11-04，auto 武装改为 10 秒且可随时取消）。适用于任何接入本机的 Agent。
+> 安装版（v1.5，2026-11-04，auto 默认不关窗口 + 配置/日志）。适用于任何接入本机的 Agent。
 > 完整版与设计见 `F:\desktop-director\prompts\AGENTS.ddir.md`。
 
 ## 什么时候生效
@@ -42,7 +42,9 @@ ddir disown --app "Code"   # 干完还回去
 
 ## auto 档额外规矩
 
-- 关闭软件前必须先让用户武装：`ddir auto on`（默认 10 秒倒计时；期间切回 semi/off 即取消）。未武装时 `close` 返回 `needs_user_consent`。
+- **auto 默认不关任何窗口**（`auto_close=off`）。要动窗口只能按用户配置：`minimize` 或 `close`；未配置时 `auto close` 返回 `auto_close_disabled`。
+- 需要关闭时才先武装：`ddir auto on`（默认 10 秒倒计时；期间切回 semi/off 即取消）。未武装时 `close` 返回 `needs_user_consent`。
+- 出问题先看日志：`ddir log --lines 40`（`~/.ddir/ddir.log`）。
 - 自动挑目标很危险：`ddir auto close` 不带 `--app` 会被拒（`needs_explicit_target`），优先用 `ddir close --window` 或 `ddir auto close --app <名字>`。
 - 关错了可以用 `ddir auto undo` 把刚才关掉的软件重新拉起来（位置也会还原）。
 

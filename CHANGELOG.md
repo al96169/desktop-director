@@ -1,5 +1,25 @@
 ﻿# Changelog
 
+## 0.10.0 - 2026-11-04
+
+**HUD 轻量化 + 体检/提示词/写路径自检**（把 mac 侧能做的收尾）：
+
+- `ddir hud` 默认改为**右下角轻量小卡**：360×~100 圆角、应用图标 + 标题 + 档位色点，
+  静态快照、无定时器、不截屏、只要辅助功能；3 秒自动淡出
+- 全屏暗化 + 缩略图墙保留为 `ddir hud --wall`（ScreenCaptureKit，需屏幕录制 + macOS 14），
+  演示时再开；托盘菜单同时提供两档
+- 小卡位置改到**右下角**：右上角会被 macOS 通知横幅盖住（通知窗口层级高于 `.floating`）
+- `ddir hud --check` 输出 `style/tiles/权限`，方便脚本判断
+- 新增 `ddir doctor [--text]`：辅助功能/屏幕录制/bundle 路径/签名/状态目录/mode/显示器/窗口/
+  托盘/自启/提示词/提示词资源 共 12 项，`ok`/`warn`/`fail` 三级，warn 不影响退出码
+- 新增 `ddir prompt [--install|--check]`：把 `prompts/AGENTS.m0.md` 打进 bundle，
+  可一键安装到 `~/.dsh/AGENTS.md`（本机已装 v1.9）
+- 新增 `ddir selftest --write`：自己开 TextEdit 窗口跑 move/hide/show/close（7+6 项）
+- 修 macOS **窗口 tabbing** 的 close 判定：关掉 tab 时 NSWindow 仍在、标题换成别的文档，
+  现在"窗口消失 **或** 标题变了"都算关闭成功（`ddir close` 与 selftest 同步）
+- 提示词 v1.9：补 HUD/doctor 用法；去掉"macOS 托盘未实现"的过期说法
+- `mac/test.sh` **39 项**
+
 ## 0.9.0 - 2026-11-04
 
 **macOS HUD：暗化 + 缩略图墙**（阶段 1 的"科幻感"层）：

@@ -19,7 +19,7 @@
 | 已完成 | 未完成 |
 |---|---|
 | Windows 后端（枚举/并排/隐藏/还原） | Linux 后端（只有设计） |
-| **macOS 后端**（AX：枚举/并排/隐藏/关闭/空闲 + 菜单栏托盘 + LaunchAgent 自启 + HUD 缩略图墙） | macOS 借用屏/热插拔（与 Windows 同步） |
+| **macOS 后端**（AX 全命令 + 菜单栏托盘 + LaunchAgent 自启 + 轻量 HUD + `doctor`） | macOS 借用屏/热插拔（与 Windows 同步） |
 | 租约排他 + 文件锁 + 心跳 + 优先级抢占 + 焦点令牌 | 托管屏"借用"与热插拔回滚 |
 | 软件认领 + 只关自己 + `auto undo` | 软件所有权到进程级 |
 | auto 10s 武装 + 默认 `auto_close=off` | HUD（缩略图墙/暗化） |
@@ -65,8 +65,10 @@ ddir claim --needs "a.txt,b.txt" --force   # 等宽并排
 ddir release            # 还原
 ddir tray               # 菜单栏常驻（三档/全部还原/日志/托管屏/自启）
 ddir autostart on       # 登录时自动起托盘（LaunchAgent）
-ddir hud                # 托管屏暗化 + 租约窗口缩略图墙（6 秒）
-./mac/test.sh           # 33 项验收（只用 TextEdit 和它自己开的窗口）
+ddir hud                # 右下角轻量小卡：你现在接管了哪些窗口（3 秒）
+ddir hud --wall         # 全屏暗化 + 缩略图墙（演示用）
+ddir doctor             # 权限/签名/托盘/自启体检
+./mac/test.sh           # 39 项验收（只用 TextEdit 和它自己开的窗口）
 ```
 
 macOS 的权限与平台差异（`hide` 只能整应用、`close` 不退进程、window-id 不是 hwnd）见

@@ -1,6 +1,6 @@
 # Desktop Director（ddir）— 窗口编排规矩
 
-> 安装版 v1.8（2026-11-04）。适用任何接入本机的 Agent；不依赖具体 Harness。Windows / macOS 同一套命令。
+> 安装版 v1.9（2026-11-04）。适用任何接入本机的 Agent；不依赖具体 Harness。Windows / macOS 同一套命令。
 > 安装方式：把本文件整段贴进你所用的全局指令（`~/.dsh/AGENTS.md`、`CLAUDE.md`、`AGENTS.md` 等）。
 > 详细设计见仓库 `prompts/AGENTS.ddir.md`，命令全集见 `ddir help`。
 
@@ -25,7 +25,9 @@ ddir status                # 我的租约、我负责的软件、焦点令牌、
 - **window-id 的写法**：Windows 是 `0x001A2B3C`；macOS 是 `pid:CGWindowNumber`（如 `75098:7449`）。都从 `ddir list` 复制，不要自己拼。
 - **macOS 的 hide 是整应用**（`caps.window_hide == "app"`）：`hide` 会把该应用的所有窗口一起隐起来，`release` 一起恢复。想只藏一个窗口就在 macOS 上用最小化或直接不改。
 - **`permission_required`**：macOS 需要"系统设置 → 隐私与安全性 → 辅助功能"里勾选 `Ddir`；没授权时所有写操作都返回这个码，只读命令（`list`/`status`）仍可用。
-- **`unsupported_on_platform`**：托盘、开机自启等平台专属功能，macOS 当前未实现，不要绕路实现。
+- **`unsupported_on_platform`**：只为真正没实现的能力返回（如 Windows HUD、Linux 后端）；macOS 的托盘/自启/HUD 都已可用，别绕路自建。
+- **可视化**：交接或演示时可以让用户看一眼你接管了什么：`ddir hud`（右下角小卡，3 秒，默认）/ `ddir hud --wall`（全屏缩略图墙，6 秒）。它只读、不抢焦点、点一下就穿过去，不要用它替代 `ddir status` 的判断。
+- **排障**：先 `ddir doctor`（权限/签名/托盘/自启/提示词是否就位）；它比逐条试错快。
 
 ## 开任务时
 

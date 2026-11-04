@@ -20,7 +20,7 @@ echo "== swiftc"
 swiftc -O -swift-version 5 -target arm64-apple-macos13.0 \
   -o "$OUT/ddir-mac" \
   Sources/Util.swift Sources/Store.swift Sources/MacWin.swift Sources/Present.swift \
-  Sources/Autostart.swift Sources/Hud.swift Sources/Tray.swift Sources/Commands.swift Sources/main.swift \
+  Sources/Autostart.swift Sources/Hud.swift Sources/Doctor.swift Sources/Tray.swift Sources/Commands.swift Sources/main.swift \
   -framework AppKit -framework ApplicationServices -framework ScreenCaptureKit
 echo "== built $OUT/ddir-mac ($(du -h "$OUT/ddir-mac" | cut -f1))"
 
@@ -30,8 +30,9 @@ fi
 
 echo "== bundle $APP"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Info.plist "$APP/Contents/Info.plist"
+cp "$ROOT/prompts/AGENTS.m0.md" "$APP/Contents/Resources/AGENTS.m0.md"
 cp "$OUT/ddir-mac" "$APP/Contents/MacOS/Ddir"
 
 echo "== sign ($SIGN_ID)"

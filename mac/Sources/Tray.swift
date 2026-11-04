@@ -171,9 +171,12 @@ final class TrayController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
 
-        let hudItem = NSMenuItem(title: "预览 HUD（6 秒）", action: #selector(previewHud), keyEquivalent: "")
+        let hudItem = NSMenuItem(title: "HUD 提示（3 秒）", action: #selector(previewHud), keyEquivalent: "")
         hudItem.target = self
         menu.addItem(hudItem)
+        let wallItem = NSMenuItem(title: "HUD 缩略图墙（6 秒）", action: #selector(previewWall), keyEquivalent: "")
+        wallItem.target = self
+        menu.addItem(wallItem)
 
         let logItem = NSMenuItem(title: "查看日志", action: #selector(openLog), keyEquivalent: "")
         logItem.target = self
@@ -305,7 +308,11 @@ final class TrayController: NSObject, NSMenuDelegate {
 
     @objc private func previewHud() {
         // the tray already runs an NSApplication loop: build the overlay, don't run another loop
-        _ = HudController.shared.present(seconds: 6)
+        _ = HudController.shared.present(style: .toast, seconds: 3)
+    }
+
+    @objc private func previewWall() {
+        _ = HudController.shared.present(style: .wall, seconds: 6)
     }
 
     @objc private func openLog() {

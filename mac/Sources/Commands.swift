@@ -415,6 +415,13 @@ func cmdShowHide(_ args: [String], hide: Bool) -> Int32 {
 /// Ownership is by name; a pid matches if the stored name equals any of its aliases
 /// (bundle executable / localized name / bundle id), so `own --app TextEdit` and
 /// `own --app 文本编辑` both gate the same windows.
+/// macOS window tabbing: closing a tab keeps the NSWindow (same CGWindowNumber) but shows
+/// another document, so "closed" must also accept "this window now shows a different title".
+func windowClosed(ref: String, title: String) -> Bool {
+    guard let w = win.listWindows().first(where: { $0.ref == ref }) else { return true }
+    return w.title != title
+}
+
 func ownedByMe(_ app: String, pid: pid_t, _ me: String) -> String? {
     let now = nowUnix()
     let apps = store.apps()
@@ -450,7 +457,7 @@ func cmdClose(_ args: [String]) -> Int32 {
     for _ in 0..<30 {
         usleep(100_000)
         win.invalidateCG()
-        if !win.isWindow(ref) { dead = true; break }
+        if windowClosed(ref: ref, title: w.title) { dead = true; break }
     }
     store.audit("close", "\(w.ref) \(w.app) pressed=\(pressed) dead=\(dead)")
     if dead {
@@ -878,7 +885,25 @@ func cmdBoard() -> Int32 {
     return 0
 }
 
-func cmdSelftest() -> Int32 {
+/// Open a TextEdit window of our own (never touches the user's documents).
+func openTestWindow(_ label: String) -> WinInfo? {
+    let path = NSTemporaryDirectory() + "ddir-selftest-\(getpid()).txt"
+    try? "ddir write-path self test\n".write(toFile: path, atomically: true, encoding: .utf8)
+    let before = Set(win.listWindows().filter { sameApp($0.app, "TextEdit") }.map { $0.ref })
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+    p.arguments = ["-a", "TextEdit", path]
+    try? p.run()
+    for _ in 0..<25 {
+        usleep(120_000)
+        win.invalidateCG()
+        let fresh = win.listWindows().filter { sameApp($0.app, "TextEdit") && !before.contains($0.ref) }
+        if let w = fresh.first { return w }
+    }
+    return nil
+}
+
+func cmdSelftest(_ args: [String]) -> Int32 {
     var pass = 0
     var fail = 0
     func check(_ name: String, _ ok: Bool, _ detail: String) {
@@ -896,6 +921,45 @@ func cmdSelftest() -> Int32 {
     check("work area", w > 0 && h > 0, "bad work area")
     print("INFO  accessibility=\(win.axTrusted) screen_recording=\(win.screenRecording) windows=\(ws.count) displays=\(ds.count)")
     print("INFO  state=\(store.home().path)")
+
+    if hasFlag(args, "--write") {
+        // Opt-in write path: our own TextEdit window, moved / hidden / closed then cleaned up.
+        guard let w = openTestWindow("selftest") else {
+            check("write: open window", false, "TextEdit did not open a window")
+            print("---")
+            print("RESULT: \(pass) passed, \(fail) failed")
+            return 1
+        }
+        check("write: open window", true, "")
+        let target = [60, 60, 520, 360]
+        let moved = win.setRect(w.ref, target)
+        let actual = win.setRect(w.ref, target).1
+        check("write: move", moved.0 && actual == target, "readback \(formatRect(actual))")
+        let hiddenOK = win.hideApp(w.pid)
+        usleep(250_000)
+        let isHidden = NSRunningApplication(processIdentifier: w.pid)?.isHidden ?? false
+        check("write: hide", hiddenOK && isHidden, "hidden=\(isHidden)")
+        _ = win.showApp(w.pid)
+        usleep(250_000)
+        check("write: show", !(NSRunningApplication(processIdentifier: w.pid)?.isHidden ?? true), "still hidden")
+        // own + close: window gone, process alive
+        var apps = store.apps()
+        apps.removeAll { sameApp($0.app, "TextEdit") }
+        apps.append(Store.AppOwner(app: "TextEdit", owner: win.agentId(), since: nowUnix(), ttl: 1800))
+        store.saveApps(apps)
+        let pressed = win.closeWindow(w.ref)
+        var gone = false
+        for _ in 0..<30 {
+            usleep(100_000)
+            win.invalidateCG()
+            if windowClosed(ref: w.ref, title: w.title) { gone = true; break }
+        }
+        check("write: close window", pressed && gone, "pressed=\(pressed) gone=\(gone)")
+        check("write: process alive", NSRunningApplication(processIdentifier: w.pid) != nil, "TextEdit quit")
+        apps.removeAll { sameApp($0.app, "TextEdit") }
+        store.saveApps(apps)
+    }
+
     print("---")
     print("RESULT: \(pass) passed, \(fail) failed")
     return fail > 0 ? 1 : 0
@@ -975,11 +1039,13 @@ func usage() {
     print("  ddir log [--lines N]                   tail ~/.ddir/ddir.log")
     print("  ddir flush                             drain the paced presentation queue")
     print("  ddir demo                              scripted demo (TextEdit windows)")
-    print("  ddir hud [--seconds N|--check]         dim overlay + thumbnail wall of leased windows")
+    print("  ddir hud [--wall] [--seconds N|--check]  corner toast (default) or full thumbnail wall")
     print("  ddir tray [--check]                    menu bar app (modes/restore/log/displays/autostart)")
     print("  ddir autostart [on|off|status]         run tray at login (LaunchAgent)")
     print("  ddir board                             human readable overview")
-    print("  ddir selftest                          platform conformance checks (7)")
+    print("  ddir selftest [--write]                platform checks (7) + optional write path")
+    print("  ddir doctor [--text]                   permissions / signing / tray / autostart diagnostics")
+    print("  ddir prompt [--install|--check]        print or install the cross-platform AGENTS prompt")
     print()
     print("env: DDIR_HOME (default ~/.ddir), DDIR_AGENT (identity override)")
     print("permissions: System Settings > Privacy & Security > Accessibility must include Ddir.app")

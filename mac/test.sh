@@ -32,6 +32,17 @@ echo "$OUT" | sed 's/^/   /'
 check "selftest 7/7" "$(echo "$OUT" | grep -c '^PASS')" "7"
 check "selftest exit 0" "$RC" "0"
 
+# 0b. write-path selftest (opens its own TextEdit window, then closes it)
+W="$("$DDIR" selftest --write 2>&1)"
+check "selftest --write: failures" "$(echo "$W" | grep -c '^FAIL')" "0"
+check "selftest --write: result line" "$(echo "$W" | grep -c '0 failed')" "1"
+
+# 0c. doctor (permissions / signing / state)
+DOC="$("$DDIR" doctor)"
+check "doctor ok" "$(echo "$DOC" | json 'd["ok"]')" "True"
+check "doctor accessibility" "$(echo "$DOC" | json 'next(c["ok"] for c in d["checks"] if c["name"]=="accessibility")')" "True"
+check "doctor signed" "$(echo "$DOC" | json '[c["status"] for c in d["checks"] if c["name"]=="signed"][0]')" "ok"
+
 # 1. mode + list
 "$DDIR" mode semi >/dev/null
 N=$("$DDIR" list | json 'len(d["windows"])')
@@ -160,7 +171,8 @@ check "tray --check ok" "$(echo "$TRAY" | json 'd["ok"]')" "True"
 check "tray menu has 模式" "$(echo "$TRAY" | json 'any(i.get("title")=="模式" for i in d["menu"])')" "True"
 check "tray menu has 全部还原" "$(echo "$TRAY" | json 'any(i.get("title","").startswith("全部还原") for i in d["menu"])')" "True"
 check "tray menu has 退出" "$(echo "$TRAY" | json 'any(i.get("title")=="退出" for i in d["menu"])')" "True"
-check "hud --check ok" "$("$DDIR" hud --check | json 'd["ok"] and d["tiles"] >= 1 and d["accessibility"]')" "True"
+check "hud --check ok (toast)" "$("$DDIR" hud --check | json 'd["ok"] and d["tiles"] >= 1 and d["accessibility"] and d["style"]=="toast"')" "True"
+check "hud --check ok (wall)" "$("$DDIR" hud --wall --check | json 'd["ok"] and d["style"]=="wall"')" "True"
 
 check "autostart reports state" "$("$DDIR" autostart status | json 'isinstance(d["enabled"], bool) and d["plist"].endswith(".plist")')" "True"
 

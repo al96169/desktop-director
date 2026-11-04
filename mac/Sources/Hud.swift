@@ -1,17 +1,26 @@
-// ddir macOS backend — HUD overlay: dim the managed display and show a thumbnail wall
-// of the windows this agent holds a lease on ("科幻感" layer, stage 1 of the product idea).
+// ddir macOS backend — HUD layer (kept deliberately lightweight).
 //
-//   ddir hud [--seconds N]   show the overlay for N seconds (default 6), never steals focus
-//   ddir hud --check         print what would be shown (JSON) and exit
+// Two styles, one of them cheap enough to use by default:
+//   toast (default)  small corner card, app icons + titles, no screen capture, ~0 CPU, static snapshot
+//   wall             full-screen dim + live thumbnail wall (ScreenCaptureKit, needs Screen Recording)
 //
-// Thumbnails need Screen Recording. macOS 15 removed CGWindowListCreateImage, so the capture
-// path is ScreenCaptureKit (SCScreenshotManager, macOS 14+). Without the permission the HUD
-// still works: it falls back to app icons + titles, and says so.
+//   ddir hud                  toast on the managed display, 3s
+//   ddir hud --wall           full-screen thumbnail wall, 6s
+//   ddir hud --seconds N      custom duration
+//   ddir hud --check          print what would be shown (JSON), open nothing
+//
+// macOS 15 removed CGWindowListCreateImage, so live thumbnails are ScreenCaptureKit only
+// (SCScreenshotManager, macOS 14+). The default toast style does not depend on it at all.
 
 import AppKit
 import ApplicationServices
 import CoreGraphics
 import ScreenCaptureKit
+
+enum HudStyle: String {
+    case toast
+    case wall
+}
 
 final class HudTile {
     var ref: String
@@ -21,7 +30,6 @@ final class HudTile {
     var icon: NSImage?
     var thumb: NSImage?
     var agent: String = ""
-    var live: Bool = false
 
     init(ref: String, app: String, title: String, rect: [Int]) {
         self.ref = ref
@@ -31,13 +39,73 @@ final class HudTile {
     }
 }
 
-final class HudView: NSView {
+private func accentColor(_ mode: String) -> NSColor {
+    switch mode {
+    case "auto": return NSColor(calibratedRed: 0.36, green: 0.95, blue: 0.52, alpha: 1)
+    case "semi": return NSColor(calibratedRed: 1.0, green: 0.78, blue: 0.25, alpha: 1)
+    default: return NSColor(white: 0.62, alpha: 1)
+    }
+}
+
+private func drawTruncated(_ text: String, in rect: NSRect, font: NSFont, color: NSColor) {
+    let p = NSMutableParagraphStyle()
+    p.lineBreakMode = .byTruncatingTail
+    let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .paragraphStyle: p]
+    (text as NSString).draw(in: rect, withAttributes: attrs)
+}
+
+// MARK: - toast (default, no capture)
+
+final class HudToastView: NSView {
+    var tiles: [HudTile] = []
+    var mode: String = "semi"
+
+    static let width: CGFloat = 360
+    static func height(rows: Int) -> CGFloat { 10 + 26 + CGFloat(max(rows, 1)) * 26 + 8 }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let card = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 12, yRadius: 12)
+        NSColor.black.withAlphaComponent(0.82).setFill()
+        card.fill()
+        accentColor(mode).withAlphaComponent(0.45).setStroke()
+        card.lineWidth = 1
+        card.stroke()
+
+        let accent = accentColor(mode)
+        accent.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 14, y: bounds.height - 20, width: 8, height: 8)).fill()
+        let head = "DDIR  ·  \(mode)  ·  \(tiles.count) 窗口"
+        drawTruncated(head, in: NSRect(x: 30, y: bounds.height - 26, width: bounds.width - 44, height: 16),
+                      font: .monospacedSystemFont(ofSize: 11, weight: .semibold),
+                      color: NSColor.white.withAlphaComponent(0.92))
+
+        if tiles.isEmpty {
+            drawTruncated("（暂无租约）", in: NSRect(x: 16, y: 12, width: bounds.width - 32, height: 16),
+                          font: .systemFont(ofSize: 11), color: NSColor.white.withAlphaComponent(0.5))
+            return
+        }
+
+        for (i, t) in tiles.prefix(4).enumerated() {
+            let y = bounds.height - 26 - 26 - CGFloat(i) * 26
+            if let icon = t.icon {
+                icon.draw(in: NSRect(x: 14, y: y + 5, width: 16, height: 16), from: .zero,
+                          operation: .sourceOver, fraction: 0.95)
+            }
+            var text = "\(t.app)  —  \(t.title)"
+            if !t.agent.isEmpty, t.agent != win.agentId() { text += "  (\(t.agent))" }
+            drawTruncated(text, in: NSRect(x: 38, y: y + 4, width: bounds.width - 52, height: 18),
+                          font: .systemFont(ofSize: 11, weight: .regular),
+                          color: NSColor.white.withAlphaComponent(0.78))
+        }
+    }
+}
+
+// MARK: - wall (full screen + live thumbnails)
+
+final class HudWallView: NSView {
     var mode: String = "semi"
     var tiles: [HudTile] = []
     var note: String = ""
-    var onLayout: (([Int], [Int]) -> Void)?   // (tile index) -> nothing; kept for tests
-
-    override var isFlipped: Bool { false }
 
     private func tileRects(in bounds: NSRect) -> [NSRect] {
         let n = max(tiles.count, 1)
@@ -62,19 +130,14 @@ final class HudView: NSView {
         NSColor.black.withAlphaComponent(0.78).setFill()
         bounds.fill()
 
-        // header
         let head = "DDIR  ·  \(mode)  ·  \(tiles.count) 窗口"
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 20, weight: .semibold),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.92),
-        ]
-        head.draw(at: NSPoint(x: 30, y: bounds.height - 48), withAttributes: attrs)
+        drawTruncated(head, in: NSRect(x: 30, y: bounds.height - 48, width: bounds.width - 60, height: 28),
+                      font: .monospacedSystemFont(ofSize: 20, weight: .semibold),
+                      color: NSColor.white.withAlphaComponent(0.92))
         if !note.isEmpty {
-            let nattrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
-                .foregroundColor: NSColor.white.withAlphaComponent(0.55),
-            ]
-            note.draw(at: NSPoint(x: 32, y: bounds.height - 68), withAttributes: nattrs)
+            drawTruncated(note, in: NSRect(x: 32, y: bounds.height - 68, width: bounds.width - 64, height: 16),
+                          font: .monospacedSystemFont(ofSize: 11, weight: .regular),
+                          color: NSColor.white.withAlphaComponent(0.55))
         }
 
         let rects = tileRects(in: bounds)
@@ -93,70 +156,62 @@ final class HudView: NSView {
                                    width: inner.width, height: inner.height - captionH)
 
             if let thumb = tile.thumb {
-                drawAspectFit(thumb, in: imageRect)
+                let size = thumb.size
+                if size.width > 0, size.height > 0 {
+                    let scale = min(imageRect.width / size.width, imageRect.height / size.height)
+                    let w = size.width * scale, h = size.height * scale
+                    thumb.draw(in: NSRect(x: imageRect.midX - w / 2, y: imageRect.midY - h / 2, width: w, height: h),
+                               from: .zero, operation: .sourceOver, fraction: 1.0)
+                }
             } else if let icon = tile.icon {
                 let s = min(min(imageRect.width, imageRect.height), 128)
-                let ir = NSRect(x: imageRect.midX - s / 2, y: imageRect.midY - s / 2, width: s, height: s)
-                icon.draw(in: ir, from: .zero, operation: .sourceOver, fraction: 0.9)
+                icon.draw(in: NSRect(x: imageRect.midX - s / 2, y: imageRect.midY - s / 2, width: s, height: s),
+                          from: .zero, operation: .sourceOver, fraction: 0.9)
             }
 
             var name = "\(tile.app)  ·  \(tile.title)"
             if !tile.agent.isEmpty, tile.agent != win.agentId() { name += "  ·  \(tile.agent)" }
-            let title = name.count > 52 ? String(name.prefix(52)) + "…" : name
-            let tattrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 12, weight: .medium),
-                .foregroundColor: NSColor.white.withAlphaComponent(0.9),
-            ]
-            title.draw(at: NSPoint(x: inner.minX + 2, y: r.minY + 20), withAttributes: tattrs)
-
+            drawTruncated(name, in: NSRect(x: inner.minX + 2, y: r.minY + 20, width: inner.width - 4, height: 16),
+                          font: .systemFont(ofSize: 12, weight: .medium),
+                          color: NSColor.white.withAlphaComponent(0.9))
             let geo = "\(tile.rect[0]),\(tile.rect[1])  \(tile.rect[2])×\(tile.rect[3])   \(tile.ref)"
-            let gattrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .regular),
-                .foregroundColor: NSColor.white.withAlphaComponent(0.45),
-            ]
-            geo.draw(at: NSPoint(x: inner.minX + 2, y: r.minY + 6), withAttributes: gattrs)
+            drawTruncated(geo, in: NSRect(x: inner.minX + 2, y: r.minY + 6, width: inner.width - 4, height: 14),
+                          font: .monospacedSystemFont(ofSize: 10, weight: .regular),
+                          color: NSColor.white.withAlphaComponent(0.45))
         }
     }
-
-    private func drawAspectFit(_ img: NSImage, in rect: NSRect) {
-        let size = img.size
-        guard size.width > 0, size.height > 0 else { return }
-        let scale = min(rect.width / size.width, rect.height / size.height)
-        let w = size.width * scale, h = size.height * scale
-        let r = NSRect(x: rect.midX - w / 2, y: rect.midY - h / 2, width: w, height: h)
-        img.draw(in: r, from: .zero, operation: .sourceOver, fraction: 1.0)
-    }
 }
+
+// MARK: - controller
 
 final class HudController {
     static let shared = HudController()
 
     private var windows: [NSWindow] = []
-    private var views: [HudView] = []
+    private var views: [NSView] = []
     private var timer: Timer?
     private var deadline: Date = .distantFuture
     private var thumbs: [String: NSImage] = [:]
     private var terminateWhenDone = false
+    private var style: HudStyle = .toast
 
-    /// Build the tile list from live leases (mine first, then other agents').
-    func tiles() -> [HudTile] {
+    /// Tiles come from live leases (mine first, then other agents'), or — when nothing is
+    /// leased — from the windows sitting on the managed display, so the HUD is never blank.
+    func tiles(limit: Int = 6) -> [HudTile] {
         let now = nowUnix()
         let me = win.agentId()
         let live = store.leases().filter { $0.expires > now }
-        let mine = live.filter { $0.agent == me }
-        let others = live.filter { $0.agent != me }
+        let ordered = live.filter { $0.agent == me } + live.filter { $0.agent != me }
         let wins = win.listWindows()
         var out: [HudTile] = []
-        for l in mine + others {
+        for l in ordered {
             guard let w = wins.first(where: { $0.ref == l.window }) else { continue }
             let t = HudTile(ref: w.ref, app: w.app, title: w.title, rect: w.win)
             t.icon = NSWorkspace.shared.icon(forFile: win.bundlePath(w.pid))
             t.agent = l.agent
-            t.live = true
             out.append(t)
         }
         if out.isEmpty {
-            // nothing leased yet: show what is on the managed display so the HUD is never blank
             let managed = win.managedDisplays().map { $0.uid }
             for w in wins where managed.contains(w.display) && !w.minimized {
                 let t = HudTile(ref: w.ref, app: w.app, title: w.title, rect: w.win)
@@ -164,104 +219,135 @@ final class HudController {
                 out.append(t)
             }
         }
-        return Array(out.prefix(6))
+        return Array(out.prefix(limit))
     }
 
-    /// Create the overlay windows and start the refresh/close timer. Does NOT enter a run loop,
-    /// so it is safe to call from the tray (which already owns one). `terminateWhenDone` makes
-    /// the blocking CLI variant quit the process when the overlay closes.
     @discardableResult
-    func present(seconds: Double = 6, terminateWhenDone: Bool = false) -> Int {
+    func present(style: HudStyle = .toast, seconds: Double = 3, terminateWhenDone: Bool = false) -> Int {
+        self.style = style
         self.terminateWhenDone = terminateWhenDone
-        let tiles = tiles()
-        let notes = CGPreflightScreenCaptureAccess()
-            ? "ScreenCaptureKit 缩略图 · \(VERSION)"
-            : "仅应用图标：需要「屏幕录制」授权才能出缩略图 · \(VERSION)"
-        let app = NSApplication.shared
-        app.setActivationPolicy(.accessory)
+        NSApplication.shared.setActivationPolicy(.accessory)
 
-        for screen in NSScreen.screens {
-            let uid = displayUID(screen)
-            let managed = win.managedDisplays().contains { $0.uid == uid }
-            if !managed { continue }
-            let w = NSWindow(contentRect: screen.frame, styleMask: .borderless,
-                             backing: .buffered, defer: false, screen: screen)
-            w.level = .floating
-            w.backgroundColor = .clear
-            w.isOpaque = false
-            w.hasShadow = false
-            w.ignoresMouseEvents = true
-            w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-            let v = HudView(frame: screen.frame)
-            v.mode = store.mode()
-            v.tiles = tiles
-            v.note = notes
-            w.contentView = v
-            windows.append(w)
-            views.append(v)
-            w.alphaValue = 0
-            w.orderFrontRegardless()
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.35
-                w.animator().alphaValue = 1
+        let tiles = tiles(limit: style == .wall ? 6 : 4)
+        if style == .toast {
+            for screen in toastScreens() {
+                let h = HudToastView.height(rows: min(tiles.count, 4))
+                let vf = screen.visibleFrame
+                // bottom-right: notification banners own the top-right corner
+                let rect = NSRect(x: vf.maxX - HudToastView.width - 16, y: vf.minY + 16,
+                                  width: HudToastView.width, height: h)
+                let w = makeWindow(rect: rect, level: .floating)
+                let v = HudToastView(frame: NSRect(origin: .zero, size: rect.size))
+                v.tiles = tiles
+                v.mode = store.mode()
+                w.contentView = v
+                windows.append(w)
+                views.append(v)
+                show(w)
             }
+            store.log("hud: toast \(tiles.count) tiles on \(windows.count) display(s), \(seconds)s")
+            scheduleClose(after: seconds)
+        } else {
+            let note = CGPreflightScreenCaptureAccess()
+                ? "ScreenCaptureKit 缩略图 · \(VERSION)"
+                : "仅应用图标：需要「屏幕录制」授权才能出缩略图 · \(VERSION)"
+            for screen in NSScreen.screens where isManaged(screen) {
+                let w = makeWindow(rect: screen.frame, level: .floating)
+                let v = HudWallView(frame: NSRect(origin: .zero, size: screen.frame.size))
+                v.mode = store.mode()
+                v.tiles = tiles
+                v.note = note
+                w.contentView = v
+                windows.append(w)
+                views.append(v)
+                show(w)
+            }
+            store.log("hud: wall \(tiles.count) tiles on \(windows.count) display(s), screen_recording=\(CGPreflightScreenCaptureAccess())")
+            loadThumbnails()
+            timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                self?.tick()
+            }
+            if let t = timer { RunLoop.main.add(t, forMode: .common) }
+            deadline = Date().addingTimeInterval(seconds)
         }
-        store.log("hud: showing \(tiles.count) tiles on \(windows.count) display(s), screen_recording=\(CGPreflightScreenCaptureAccess())")
-        loadThumbnails()
-
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.tick()
-        }
-        if let t = timer { RunLoop.main.add(t, forMode: .common) }
-        deadline = Date().addingTimeInterval(seconds)
         return tiles.count
     }
 
-    private func displayUID(_ screen: NSScreen) -> String {
+    private func makeWindow(rect: NSRect, level: NSWindow.Level) -> NSWindow {
+        let w = NSWindow(contentRect: rect, styleMask: .borderless, backing: .buffered, defer: false)
+        w.level = level
+        w.backgroundColor = .clear
+        w.isOpaque = false
+        w.hasShadow = false
+        w.ignoresMouseEvents = true
+        w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        return w
+    }
+
+    private func show(_ w: NSWindow) {
+        w.alphaValue = 0
+        w.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.22
+            w.animator().alphaValue = 1
+        }
+    }
+
+    private func scheduleClose(after seconds: Double) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            self?.close(fade: 0.3)
+        }
+    }
+
+    private func close(fade: Double) {
+        timer?.invalidate()
+        timer = nil
+        let closing = windows
+        windows.removeAll()
+        views.removeAll()
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = fade
+            for w in closing { w.animator().alphaValue = 0 }
+        }, completionHandler: {
+            for w in closing { w.orderOut(nil) }
+            if self.terminateWhenDone { NSApp.terminate(nil) }
+        })
+    }
+
+    /// wall style: keep tiles in sync while the overlay is up; thumbnails are cached by ref.
+    private func tick() {
+        let fresh = tiles(limit: style == .wall ? 6 : 4)
+        for t in fresh where t.thumb == nil { t.thumb = thumbs[t.ref] }
+        for v in views {
+            guard let w = v as? HudWallView else { continue }
+            w.tiles = fresh
+            w.mode = store.mode()
+            w.needsDisplay = true
+        }
+        if Date() >= deadline { close(fade: 0.3) }
+    }
+
+    private func isManaged(_ screen: NSScreen) -> Bool {
         let num = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
         let id = CGDirectDisplayID(num?.uint32Value ?? 0)
-        return id == 0 ? "screen-0" : "cg-\(id)"
+        let uid = id == 0 ? "screen-0" : "cg-\(id)"
+        return win.managedDisplays().contains { $0.uid == uid }
     }
 
-    private func tick() {
-        // keep the wall in sync with claims/releases while the overlay is up.
-        // Thumbnails live in `thumbs` (keyed by ref) so a refresh never wipes them.
-        let fresh = tiles()
-        for t in fresh where t.thumb == nil {
-            t.thumb = thumbs[t.ref]
-        }
-        for v in views {
-            v.tiles = fresh
-            v.mode = store.mode()
-            v.needsDisplay = true
-        }
-        if Date() >= deadline {
-            timer?.invalidate()
-            timer = nil
-            for w in windows {
-                NSAnimationContext.runAnimationGroup { ctx in
-                    ctx.duration = 0.3
-                    w.animator().alphaValue = 0
-                }
-            }
-            let deadlineCopy = deadline
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                guard Date() >= deadlineCopy else { return }
-                for w in self.windows { w.orderOut(nil) }
-                self.windows.removeAll()
-                self.views.removeAll()
-                self.thumbs.removeAll()
-                if self.terminateWhenDone { NSApp.terminate(nil) }
-            }
-        }
+    private func toastScreens() -> [NSScreen] {
+        let managed = NSScreen.screens.filter { isManaged($0) }
+        if !managed.isEmpty { return managed }
+        return [NSScreen.main].compactMap { $0 }
     }
 
-    // MARK: - ScreenCaptureKit thumbnails (macOS 14+)
+    // MARK: - ScreenCaptureKit thumbnails (wall only, macOS 14+)
 
     private func loadThumbnails() {
         guard CGPreflightScreenCaptureAccess() else { return }
         guard #available(macOS 14.0, *) else { return }
-        let snapshot = views.flatMap { $0.tiles }.filter { $0.thumb == nil && thumbs[$0.ref] == nil }
+        let snapshot = views.compactMap { $0 as? HudWallView }
+            .flatMap { $0.tiles }
+            .filter { $0.thumb == nil && thumbs[$0.ref] == nil }
         guard !snapshot.isEmpty else { return }
         Task { @MainActor in
             let content: SCShareableContent
@@ -284,36 +370,40 @@ final class HudController {
                 cfg.height = Int(max(64, sc.frame.height) * scale)
                 cfg.showsCursor = false
                 if let cg = try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg) {
-                    tile.thumb = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
-                    self.thumbs[tile.ref] = tile.thumb
+                    let img = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+                    tile.thumb = img
+                    self.thumbs[tile.ref] = img
                 }
             }
             for v in self.views {
-                for t in v.tiles where t.thumb == nil { t.thumb = self.thumbs[t.ref] }
-                v.needsDisplay = true
+                guard let wv = v as? HudWallView else { continue }
+                for t in wv.tiles where t.thumb == nil { t.thumb = self.thumbs[t.ref] }
+                wv.needsDisplay = true
             }
-            store.log("hud: thumbnails captured \(self.thumbs.count)/\(snapshot.count) (this round)")
+            store.log("hud: thumbnails captured \(self.thumbs.count) (this round \(snapshot.count))")
         }
     }
 
-    func checkJSON() -> String {
-        let t = tiles()
-        let bounds = t.map { "\"\(es($0.ref))\"" }.joined(separator: ",")
-        return "{\"ok\":true,\"platform\":\"macos\",\"mode\":\"\(es(store.mode()))\",\"tiles\":\(t.count),"
-            + "\"screen_recording\":\(CGPreflightScreenCaptureAccess()),\"accessibility\":\(win.axTrusted),"
-            + "\"displays\":\(win.managedDisplays().count),\"windows\":[\(bounds)]}"
+    func checkJSON(style: HudStyle) -> String {
+        let t = tiles(limit: style == .wall ? 6 : 4)
+        let refs = t.map { "\"\(es($0.ref))\"" }.joined(separator: ",")
+        return "{\"ok\":true,\"platform\":\"macos\",\"style\":\"\(style.rawValue)\",\"mode\":\"\(es(store.mode()))\","
+            + "\"tiles\":\(t.count),\"screen_recording\":\(CGPreflightScreenCaptureAccess()),"
+            + "\"accessibility\":\(win.axTrusted),\"displays\":\(win.managedDisplays().count),\"windows\":[\(refs)]}"
     }
 }
 
 func cmdHud(_ args: [String]) -> Int32 {
+    let style: HudStyle = hasFlag(args, "--wall") ? .wall : .toast
     if hasFlag(args, "--check") {
-        emit(HudController.shared.checkJSON())
+        emit(HudController.shared.checkJSON(style: style))
         return 0
     }
-    let secs = Double(argValue(args, "--seconds") ?? "") ?? 6
-    // present() returns immediately; emit the JSON first, then pump the loop until it closes
-    let n = HudController.shared.present(seconds: secs, terminateWhenDone: true)
-    emit("{\"ok\":true,\"tiles\":\(n),\"seconds\":\(secs),\"screen_recording\":\(CGPreflightScreenCaptureAccess())}")
+    let defaultSecs: Double = style == .wall ? 6 : 3
+    let secs = Double(argValue(args, "--seconds") ?? "") ?? defaultSecs
+    let n = HudController.shared.present(style: style, seconds: secs, terminateWhenDone: true)
+    emit("{\"ok\":true,\"style\":\"\(style.rawValue)\",\"tiles\":\(n),\"seconds\":\(secs),"
+         + "\"screen_recording\":\(CGPreflightScreenCaptureAccess())}")
     NSApplication.shared.run()
     return 0
 }

@@ -437,6 +437,14 @@ pub fn show(hwnd: Hwnd) {
     }
 }
 
+pub unsafe fn show_raw(hwnd: Hwnd) {
+    let _ = ShowWindow(hwnd, 9); // SW_RESTORE
+}
+
+pub unsafe fn minimize(hwnd: Hwnd) {
+    let _ = ShowWindow(hwnd, 6); // SW_MINIMIZE
+}
+
 pub fn close_graceful(hwnd: Hwnd) -> bool {
     unsafe { PostMessageW(hwnd, WM_CLOSE, 0, 0) != 0 }
 }
@@ -469,6 +477,35 @@ pub fn cursor() -> (i32, i32) {
 
 pub fn foreground_hex() -> String {
     unsafe { format!("0x{:08X}", GetForegroundWindow() as u64) }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct SystemTimeW {
+    year: u16,
+    month: u16,
+    day_of_week: u16,
+    day: u16,
+    hour: u16,
+    minute: u16,
+    second: u16,
+    milliseconds: u16,
+}
+
+#[link(name = "kernel32")]
+extern "system" {
+    fn GetLocalTime(st: *mut SystemTimeW);
+}
+
+pub fn now_string() -> String {
+    unsafe {
+        let mut st = SystemTimeW::default();
+        GetLocalTime(&mut st);
+        format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+            st.year, st.month, st.day, st.hour, st.minute, st.second
+        )
+    }
 }
 
 pub fn parse_hwnd(s: &str) -> Option<Hwnd> {

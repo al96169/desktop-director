@@ -27,6 +27,7 @@ struct MonitorInfo {
     rc_monitor: Rect,
     rc_work: Rect,
     flags: u32,
+    sz_device: [u16; 32],
 }
 
 #[repr(C)]
@@ -291,8 +292,10 @@ pub fn displays() -> Vec<Display> {
         let primary = (mi.flags & 1) != 0;
         let mon = mi.rc_monitor.xywh();
         let work = mi.rc_work.xywh();
+        let dev = wide_to_string(&mi.sz_device);
+        let uid = if dev.is_empty() { format!("mon{}", i) } else { dev.clone() };
         result.push(Display {
-            uid: format!("mon{}", i),
+            uid,
             gdi: format!("DISPLAY{}", i + 1),
             label: format!("{}x{} @ {},{}", mon[2], mon[3], mon[0], mon[1]),
             primary,

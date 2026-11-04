@@ -1,0 +1,5 @@
+[01:21:50] demo start · work=C:\Users\54705\ddir-webdev-demo · platform=win32
+[01:21:51] create-vite rc=1
+[01:21:51] create-vite failed rc=1 out='' err='\'"npm exec --yes create-vite@latest shop-web -- --template vue-ts"\' \ufffd\ufffd\ufffd\ufffd\ufffd\u06b2\ufffd\ufffd\ufffd\ufffd\u2cbf\ufffd\ufffd\ufffd\ue8ec\u04b2\ufffd\ufffd\ufffd\u01ff\ufffd\ufffd\ufffd\ufffd\u0435\u0133\ufffd\ufffd\ufffd\n\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\u013c\ufffd\ufffd\ufffd\n'
+[01:21:51] terminal: npm create vite … npm install … npm run dev
+[01:23:52] dev server did not come up — check the terminal

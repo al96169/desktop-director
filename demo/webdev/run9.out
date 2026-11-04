@@ -1,0 +1,24 @@
+[01:50:23] demo start · work=C:\Users\54705\ddir-webdev-demo · platform=win32
+[01:50:28] create-vite rc=0
+[01:50:28] scaffold files: ['.gitignore', '.vscode', 'README.md', 'index.html', 'package.json', 'public', 'src', 'tsconfig.app.json', 'tsconfig.json', 'tsconfig.node.json', 'vite.config.ts']
+[01:50:41] npm install rc=0
+[01:50:41] copy app overlay rc=3
+[01:50:41] window powershell · 管理员: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.e · 0x00172184
+[01:50:41] terminal: npm create vite … npm install … npm run dev
+[01:50:45] dev server ready
+[01:50:45] tile 5 -> 367px columns
+[01:50:51] tile 2 -> 939px columns
+[01:50:54] writing FeatureBanner.vue (925 bytes) — Vite HMR updates the page live
+[01:50:59] window Code · Visual Studio Code · 0x024D188E
+[01:51:02] tile 2 -> 939px columns
+[01:51:09] tile 3 -> 621px columns
+[01:51:20] window msedge · brand-film.mp4 - 个人 - Microsoft​ Edge · 0x013D11EC
+[01:51:27] window msedge · product-teaser.mp4 - 个人 - Microsoft​ Edge · 0x001F1DE8
+[01:51:34] window msedge · customer-call.m4a - 个人 - Microsoft​ Edge · 0x013C17D4
+[01:51:41] window msedge · standup-notes.m4a - 个人 - Microsoft​ Edge · 0x000619D0
+[01:51:42] media: 4 native players tiled
+[01:51:53] window explorer · src · 0x011517D8
+[01:51:56] window Photos · 照片 · 0x000220D0
+[01:51:56] tile 3 -> 621px columns
+[01:52:05] finale
+[01:52:11] rollback: closed 12 windows, mode=off

@@ -1,4 +1,4 @@
-//! Presentation queue: decouples "operation" (decide geometry) from "presentation" (apply it on screen).
+﻿//! Presentation queue: decouples "operation" (decide geometry) from "presentation" (apply it on screen).
 //! instant  -> apply immediately (default, machine speed)
 //! paced    -> enqueue ops, apply at step_ms cadence (human can follow)
 //! The queue is a directory of tiny op files, so producer (CLI) and consumer (tray / flush / demo)
@@ -57,6 +57,7 @@ fn apply_one(path: &PathBuf) -> bool {
     let r: Vec<i32> = f[1..5].iter().filter_map(|s| s.parse().ok()).collect();
     if hwnd != 0 && r.len() == 4 {
         win::set_rect(hwnd, [r[0], r[1], r[2], r[3]]);
+        win::raise_noactivate(hwnd);
     }
     let _ = fs::remove_file(path);
     true

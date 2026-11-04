@@ -97,6 +97,10 @@ ddir disown --app "Code"     # 干完还回去
 - 用户没要求时**不必专门准备演示**：任务本身有可见成果（页面、界面、报告）时，
   顺手 `claim` 出来让用户看一眼就够。
 - 演示完 `ddir release`；演示用的窗口 `ddir close` 掉，别留垃圾。
+- **媒体播放**：`ddir play <file> [--detach]`（视频/音频都行，可同时开多个、各自平铺）。
+  `play` 会前台运行到窗口关闭；脚本里要开多个就用 `--detach`。
+- **`move` 会记租约**：`ddir move --force` 之后 `ddir release` 能还原（不要用完 move 就忘了收队）。
+- 演示前确认 `ddir mode` 不是 `off`（off 时写操作一律被拒）；演完切回 `off`。
 
 ## 判断"要不要给用户看"
 

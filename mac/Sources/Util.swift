@@ -4,7 +4,7 @@
 
 import Foundation
 
-let VERSION = "0.11.2"
+let VERSION = "0.11.3"
 let GAP = 16
 let LEASE_TTL: UInt64 = 300
 

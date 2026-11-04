@@ -1,5 +1,21 @@
 ﻿# Changelog
 
+## 0.11.3 - 2026-11-05
+
+**多路原生播放 + 新会话实测反馈修复**
+
+- `ddir play <file> [--muted] [--detach]`：视频走 AVPlayerLayer；纯音频改为自绘"音频播放器"卡
+  （标题 / 文件名 / 28 段电平条 / 时间码 / 进度线）；`--detach` 让脚本一次开多个播放器时不被前台阻塞
+- 修播放器图层不跟随 AX 缩放（`setFrameSize` 同步 playerLayer.frame），平铺后不再出现"细条视频"
+- **`ddir move` 现在会记租约**（action=move，from=移动前矩形）：`move --force` 之后 `ddir release` 能还原
+- `ddir close` 返回里加 note：macOS 只关窗口、进程按平台语义继续运行（避免 `process_alive:true` 被当成失败）
+- 演示：`demo/webdev/run.py` 增加 2x2 原生媒体墙（2 视频 + 2 音频同时播放）；
+  素材改为业务化命名（brand-film / product-teaser / customer-call / standup-notes，NASA 公有领域 + CC0）
+- 提示词 v2.0 补三条：`play --detach`、`move` 记得 `release`、演示前确认 `mode != off` 并演完切回 off
+
+实测：新会话（独立上下文）仅凭任务提示词完成 4 窗口 2x2 编排、播放与收队；按反馈修掉
+"play 阻塞 / move 不算租约 / close 语义误读"。
+
 ## 0.11.2 - 2026-11-05
 
 **提示词 v2.0：轻量演示规则**（并修 README/文档里的版本引用）

@@ -78,6 +78,7 @@ rect_of() { ddir_list | python3 -c "import json,sys;d=json.load(sys.stdin);print
 "$DDIR" move --window "$A" --rect "240,160,600,500" --force >/dev/null
 check "three docs tiled by ddir" "$(ddir_list | json 'sum(1 for w in d["windows"] if w["app"]=="TextEdit")')" "3"
 check "move readback" "$(rect_of a.txt)" "240,160,600,500"
+check "move records a lease" "$("$DDIR" status | json 'd["leases"] >= 1')" "True"
 PRE_A="$(rect_of a.txt)"   # claim/release must come back to where the window was pre-claim
 
 # 4. hide (app level) then release
@@ -163,6 +164,10 @@ DDIR_AGENT=race-a "$DDIR" release >/dev/null 2>&1; DDIR_AGENT=race-b "$DDIR" rel
 # 11. an expired lease must not block a new claim
 "$DDIR" release >/dev/null 2>&1
 printf '%s\tstale-agent\tmove\t0,0,100,100\t0,0,100,100\t1\tls_dead\tnormal\t1\n' "$A" >> "$DDIR_HOME/leases.tsv"
+PLAY="$("$DDIR" play "$(pwd)/../README.md" --detach 2>/dev/null)"
+check "play --detach returns at once" "$(echo "$PLAY" | json 'd.get("detached", False)')" "True"
+PREF=$(echo "$PLAY" | json 'd.get("pid", 0)')
+[ -n "$PREF" ] && [ "$PREF" != "0" ] && kill "$PREF" 2>/dev/null
 check "expired lease ignored" "$(DDIR_AGENT=fresh "$DDIR" claim --needs "a.txt" --force | json 'd["ok"]')" "True"
 DDIR_AGENT=fresh "$DDIR" release >/dev/null 2>&1
 

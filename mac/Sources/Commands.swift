@@ -370,7 +370,26 @@ func cmdMove(_ args: [String]) -> Int32 {
         emit("{\"ok\":false,\"error\":\"no_window\",\"window\":\"\(es(ref))\"}")
         return 0
     }
+    let before = win.listWindows().first { $0.ref == ref }?.win ?? rect
     let (ok, actual) = win.setRect(ref, rect)
+    if ok {
+        // record it, otherwise `release` cannot undo a raw `move --force`
+        let me = win.agentId()
+        let now = nowUnix()
+        let lock = store.lock()
+        defer { _ = lock }
+        var leases = store.leases()
+        if let i = leases.firstIndex(where: { $0.agent == me && $0.window == ref }) {
+            leases[i].to = rect
+            leases[i].expires = now + LEASE_TTL
+        } else {
+            leases.append(Store.Lease(window: ref, agent: me, action: "move", from: before, to: rect,
+                                      expires: now + LEASE_TTL,
+                                      lease: String(format: "ls_move_%06x", UInt32(truncatingIfNeeded: now) ^ UInt32(getpid())),
+                                      priority: "normal", since: now))
+        }
+        store.saveLeases(leases)
+    }
     let app = win.parseRef(ref).map { win.appName($0.pid) } ?? "?"
     store.audit("move", "\(ref) \(formatRect(rect)) actual=\(formatRect(actual))")
     emit("{\"ok\":\(ok),\"window\":\"\(es(ref))\",\"app\":\"\(es(app))\",\"rect\":\(rectJSON(rect)),"
@@ -461,7 +480,8 @@ func cmdClose(_ args: [String]) -> Int32 {
     }
     store.audit("close", "\(w.ref) \(w.app) pressed=\(pressed) dead=\(dead)")
     if dead {
-        emit("{\"ok\":true,\"closed\":true,\"window\":\"\(es(w.ref))\",\"app\":\"\(es(w.app))\",\"process_alive\":true}")
+        emit("{\"ok\":true,\"closed\":true,\"window\":\"\(es(w.ref))\",\"app\":\"\(es(w.app))\",\"process_alive\":true,"
+             + "\"note\":\"macOS: close 只关窗口，进程按平台语义继续运行\"}")
     } else {
         emit("{\"ok\":false,\"error\":\"close_blocked\",\"window\":\"\(es(w.ref))\","
              + "\"reason\":\"3 秒内窗口未消失（可能有未保存内容或模态框），不重试、不强杀\"}")

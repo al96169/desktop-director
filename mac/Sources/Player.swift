@@ -184,8 +184,26 @@ final class PlayerController: NSObject, NSWindowDelegate {
 
 func cmdPlay(_ args: [String]) -> Int32 {
     guard let file = positional(args).first else {
-        emit("{\"ok\":false,\"error\":\"invalid_args\",\"hint\":\"play <file> [--muted]\"}")
+        emit("{\"ok\":false,\"error\":\"invalid_args\",\"hint\":\"play <file> [--muted] [--detach]\"}")
         return 1
+    }
+    // `play` stays in the foreground while the window is open (it owns the run loop).
+    // Scripts that open several players want --detach: spawn a copy without the flag and return.
+    if hasFlag(args, "--detach") {
+        let exe = Bundle.main.executablePath ?? CommandLine.arguments[0]
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: exe)
+        p.arguments = ["play", file] + (hasFlag(args, "--muted") ? ["--muted"] : [])
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        do {
+            try p.run()
+            emit("{\"ok\":true,\"detached\":true,\"pid\":\(p.processIdentifier),\"file\":\"\(es(file))\"}")
+            return 0
+        } catch {
+            emit("{\"ok\":false,\"error\":\"\(es(error.localizedDescription))\"}")
+            return 1
+        }
     }
     return PlayerController().run(file: file, muted: hasFlag(args, "--muted"))
 }

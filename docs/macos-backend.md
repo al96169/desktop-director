@@ -23,7 +23,7 @@
 | `prompt` | ✅ 打进 bundle 的 AGENTS.m0.md：`ddir prompt` 打印、`--install` 写 `~/.dsh/AGENTS.md` |
 | `selftest --write` | ✅ 自己开一个 TextEdit 窗口，测 move/hide/show/close（7+6 项） |
 | `stage`（演出模式） | ✅ `ddir stage run`：清场→Mission Control→AI 写代码→双媒体→缩略图墙→收队，全程 ddir 编排、可回滚 |
-| `play` / `web` | ✅ 自带 AVPlayer 窗口 / 无浏览器 chrome 的 WKWebView 窗口（演出用，不依赖 AppleScript） |
+| `play` / `web` | ✅ 自带 AVPlayer 窗口（视频层 / 音频播放器卡，`--detach` 可后台）/ 无 chrome 的 WKWebView 窗口 |
 | HUD（缩略图墙/暗化/入场动画） | ❌ 未做；需要 ScreenCaptureKit + 屏幕录制授权 |
 | 托管屏"借用"、热插拔回滚 | ❌ 未做（与 Windows 同步的欠账） |
 

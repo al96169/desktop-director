@@ -1,4 +1,4 @@
-﻿//! Native Win32 tray for ddir (no external crates).
+//! Native Win32 tray for ddir (no external crates).
 
 use crate::{autostart_on, autostart_set, release_all, store, win};
 use std::ffi::c_void;
@@ -10,6 +10,7 @@ const WM_DESTROY: u32 = 0x0002;
 const WM_CLOSE: u32 = 0x0010;
 const WM_COMMAND: u32 = 0x0111;
 const WM_TIMER: u32 = 0x0113;
+const WM_DISPLAYCHANGE: u32 = 0x007E;
 const WM_APP: u32 = 0x8000;
 const TRAY_MSG: u32 = WM_APP + 1;
 const WM_RBUTTONUP: u32 = 0x0205;
@@ -50,6 +51,8 @@ const CMD_LOG: usize = 108;
 const CMD_AC_OFF: usize = 109;
 const CMD_AC_MIN: usize = 110;
 const CMD_AC_CLOSE: usize = 111;
+const CMD_DISPLAY_BASE: usize = 200;
+static mut DISPLAY_IDS: Vec<String> = Vec::new();
 
 #[repr(C)]
 struct WndClassW {
@@ -228,6 +231,15 @@ unsafe fn build_menu() -> isize {
     let acw = wide("自动关闭");
     AppendMenuW(menu, MF_POPUP, acmenu as usize, acw.as_ptr());
     menu_item_str(menu, MF_STRING, CMD_LOG, "查看日志");
+    let dmenu = CreatePopupMenu();
+    let mut dmap: Vec<String> = Vec::new();
+    for (i, d) in win::displays().iter().enumerate() {
+        menu_item_str(dmenu, MF_STRING | if d.managed { MF_CHECKED } else { 0 }, CMD_DISPLAY_BASE + i, &format!("{} ({})", d.gdi, d.label));
+        dmap.push(d.uid.clone());
+    }
+    unsafe { DISPLAY_IDS = dmap; }
+    let dw = wide("屏幕");
+    AppendMenuW(menu, MF_POPUP, dmenu as usize, dw.as_ptr());
     menu_item_str(menu, MF_STRING, CMD_LIST, "窗口列表（前 8 个）");
     let auto_flag = if autostart_on() { MF_CHECKED } else { 0 };
     menu_item_str(menu, MF_STRING | auto_flag, CMD_AUTOSTART, "开机自启");
@@ -277,6 +289,32 @@ unsafe fn show_menu(hwnd: Hwnd, nid: &mut NotifyIconDataW) {
             let enabled = autostart_set(!now);
             refresh_icon(nid);
             balloon(nid, "ddir", if enabled { "已设置开机自启" } else { "已取消开机自启" });
+        }
+        c if c >= CMD_DISPLAY_BASE => {
+            let idx = c - CMD_DISPLAY_BASE;
+            let ids = unsafe { DISPLAY_IDS.clone() };
+            if let Some(uid) = ids.get(idx) {
+                let ds = win::displays();
+                let mut list: Vec<String> = store::config_get("managed_displays")
+                    .unwrap_or_else(|| "all_except_primary".into())
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty() && s != "none")
+                    .collect();
+                if list.len() == 1 && (list[0] == "all" || list[0] == "all_except_primary") {
+                    list = ds.iter().filter(|d| d.managed).map(|d| d.uid.clone()).collect();
+                }
+                if list.iter().any(|u| u == uid) {
+                    list.retain(|u| u != uid);
+                } else {
+                    list.push(uid.clone());
+                }
+                let value = if list.is_empty() { "none".to_string() } else { list.join(",") };
+                let _ = store::config_set("managed_displays", &value);
+                store::log(&format!("tray: managed_displays -> {}", value));
+                refresh_icon(nid);
+                balloon(nid, "ddir", &format!("托管屏已更新：{}", value));
+            }
         }
         CMD_LOG => {
             let p = store::log_path();
@@ -352,6 +390,10 @@ extern "system" fn wnd_proc(hwnd: Hwnd, msg: u32, wp: usize, lp: isize) -> isize
                 let mut nid = add_icon(hwnd);
                 SetTimer(hwnd, 1, 3000, 0);
                 refresh_icon(&mut nid);
+                0
+            }
+            WM_DISPLAYCHANGE => {
+                store::log("display configuration changed");
                 0
             }
             WM_TIMER => {

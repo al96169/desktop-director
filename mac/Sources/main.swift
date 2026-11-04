@@ -35,6 +35,7 @@ case "heartbeat", "hb": code = cmdHeartbeat()
 case "focus": code = cmdFocus(rest)
 case "demo": code = cmdDemo()
 case "log", "logs": code = cmdLog(rest)
+case "hud": code = cmdHud(rest)
 case "tray": code = cmdTray(rest)
 case "autostart": code = cmdAutostart(rest)
 case "version", "--version", "-v", "-V":

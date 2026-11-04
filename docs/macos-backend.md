@@ -18,6 +18,7 @@
 | `demo` | ✅ TextEdit 版（自己开、自己关） |
 | `tray`（NSStatusItem：三档/还原/auto_close/窗口/托管屏/日志/自启/退出） | ✅ 菜单栏常驻，3s tick 消费 `paced` 队列 + 越权关闭检测 |
 | `autostart`（LaunchAgent） | ✅ `on/off/status`，`launchctl bootstrap/bootout` |
+| `hud`（暗化 + 缩略图墙 + 淡入淡出） | ✅ `ddir hud [--seconds N]`，ScreenCaptureKit 抓图，点击穿透、不抢焦点 |
 | HUD（缩略图墙/暗化/入场动画） | ❌ 未做；需要 ScreenCaptureKit + 屏幕录制授权 |
 | 托管屏"借用"、热插拔回滚 | ❌ 未做（与 Windows 同步的欠账） |
 
@@ -47,13 +48,36 @@ ddir autostart on|off|status   # ~/Library/LaunchAgents/com.ddir.mac.tray.plist
 - LaunchAgent 启动的进程同样拿到辅助功能授权（实测 `accessibility=true`，能看到 8 个窗口）：
   TCC 认签名身份，不认启动方式。
 
-## 3. 构建 / 安装 / 自测
+## 3. HUD 覆盖层（科幻感）
+
+```bash
+ddir hud                  # 托管屏暗化 + 租约窗口缩略图墙，6 秒后淡出
+ddir hud --seconds 12     # 自定义时长
+ddir hud --check          # 只输出将要展示的内容（JSON），不开窗
+```
+
+托盘菜单里的「预览 HUD（6 秒）」是同一个实现（`HudController.present`，不另起 run loop）。
+
+- **不抢焦点、不挡操作**：`NSWindow(.borderless, level: .floating, ignoresMouseEvents = true)`，
+  `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]`，用
+  `orderFrontRegardless()` 上屏（不 activate）。实测截图里前台仍是 TextEdit。
+- **只覆盖托管屏**：按 `managed_displays` 逐屏开一个覆盖窗，用户屏一个像素都不碰。
+- **内容**：标题 `DDIR · <mode> · N 窗口`；每块卡片 = 缩略图 + `App · 标题` + `x,y  W×H  pid:cgwin`；
+  没有租约时回退为"托管屏上的窗口"，不会出现空 HUD；他人租约的卡片标题后面会带 agent 名。
+- **缩略图**：macOS 15 删掉了 `CGWindowListCreateImage`（SDK 里标记 obsoleted），所以走
+  **ScreenCaptureKit**：`SCShareableContent` 找 `SCWindow`（按 windowID）→ `SCContentFilter(desktopIndependentWindow:)`
+  → `SCScreenshotManager.captureImage`。需要「屏幕录制」授权；未授权时只用应用图标并标注原因，功能不崩。
+- **刷新**：1s tick 重新读租约并重绘；缩略图按 `ref` 缓存在 `thumbs` 里
+  （早期版本每次 tick 重建 tile 会把缩略图冲掉，表现为"只有图标"）。
+- **退出**：CLI 版本在关窗后 `NSApp.terminate`；托盘版本只关窗，进程继续。
+
+## 4. 构建 / 安装 / 自测
 
 ```bash
 cd ~/desktop-director
 ./mac/build.sh              # swiftc -> Ddir.app -> codesign(ddir-dev) -> ~/.local/bin/ddir
 ./mac/build.sh --no-install # 只编译（产物 mac/build/ddir-mac）
-./mac/test.sh               # 32 项验收（TextEdit，只用自己开的窗口）
+./mac/test.sh               # 33 项验收（TextEdit，只用自己开的窗口）
 ```
 
 * App 固定在 `~/Applications/Ddir.app`，bundle id `com.ddir.mac`，可执行文件 `Contents/MacOS/Ddir`。
@@ -62,7 +86,7 @@ cd ~/desktop-director
 * 命令入口：`~/.local/bin/ddir` → `exec ~/Applications/Ddir.app/Contents/MacOS/Ddir "$@"`。
 * 只读命令（`list`/`displays`/`status`/`selftest`）在未授权时仍可用；所有写命令返回 `permission_required`。
 
-## 4. 平台事实（实测，别再试错）
+## 5. 平台事实（实测，别再试错）
 
 | 事实 | 细节 |
 |---|---|
@@ -79,7 +103,7 @@ cd ~/desktop-director
 | 授权归属 | TCC 辅助功能按**签名身份**判定：同一签名二进制即使被拷到 `/tmp` 仍 `accessibility=true`（实测）；屏幕录制当前 `false`，做 HUD 前要重新勾选 `Ddir` |
 | 显示器 | `NSScreen`（左下原点）→ CG（左上原点）换算 `y = mainHeight - (y + h)`；`work` 取 `visibleFrame`（菜单栏 25pt、Dock 已扣除）|
 
-## 5. 与 Windows 版的差异（协议已表达，别当成 bug）
+## 6. 与 Windows 版的差异（协议已表达，别当成 bug）
 
 | 项 | Windows | macOS |
 |---|---|---|
@@ -89,12 +113,13 @@ cd ~/desktop-director
 | `class` 字段 | Win32 类名 | AX subrole（`AXStandardWindow` 等）|
 | `dpi` | 96/120/144… | `72 × backingScaleFactor`（Retina 144），另有 `scale` 字段 |
 | 托盘 / 自启 | Rust 原生托盘 + HKCU Run | NSStatusItem + LaunchAgent |
+| HUD | ❌ 未做（HUD crate 在路线图） | ✅ ScreenCaptureKit 缩略图墙 + 暗化 |
 | `auto` 的候选过滤 | explorer / 前台 / 已认领 | Finder / 前台 / 已认领 |
 | `demo` | notepad | TextEdit |
 
 JSON 里额外提供了 `actual`（move 后的读回值）、`hidden`、`pid`、`scale`、`process_alive` 等字段；只增不改，Windows 客户端可忽略。
 
-## 6. 已知边界
+## 7. 已知边界
 
 1. **AX 只对"有窗口的 app"有效**：菜单栏常驻 / 后台进程没有窗口，`list` 看不到（与 Alt-Tab 一致）。
 2. **同一文档开两个窗口**时标题与几何可能完全相同；现在靠 CGWindowNumber 唯一性区分，`close` 一次只关一个。
@@ -102,13 +127,14 @@ JSON 里额外提供了 `actual`（move 后的读回值）、`hidden`、`pid`、
    在真实弹保存面板的 app 上会正常返回。
 4. **`hide` 的应用级语义**意味着"藏一个窗口"在 macOS 上做不到；`release` 会把该应用所有隐藏窗口一起恢复。
 5. **不动用户的屏**：单屏时按 D15 回退为"托管这块屏"，`claim` 仍会避开前台窗口与用户活跃时段（`user_active`）。
-6. **HUD 未做**：需要屏幕录制授权（当前 `screen_recording=false`），先补授权再上 ScreenCaptureKit。
+6. **HUD 缩略图需要屏幕上录制授权 + macOS 14**：未授权/旧系统时退化为应用图标（HUD 本身仍可用）；
+   当前这台机器已授权（`screen_recording=true`）。
 7. **`tray` 必须跑在 GUI 会话里**（`launchctl` 的 gui/$UID 域）。SSH 里直接 `ddir tray` 能起来但图标不显示，
    因为不在同一个 session；排障时用 `launchctl print gui/$(id -u)/com.ddir.mac.tray` 看状态。
 8. **Windows 的托盘 `全部还原` 有同样的身份问题**（`src/tray.rs` 调 `release_all()`，只释放托盘进程自己的租约）。
    macOS 侧已用 `force: true` 修正；Windows 侧待确认/修复。
 
-### 验收覆盖（`mac/test.sh`，32 项）
+### 验收覆盖（`mac/test.sh`，33 项）
 
 | 组 | 覆盖 |
 |---|---|
@@ -119,10 +145,11 @@ JSON 里额外提供了 `actual`（move 后的读回值）、`hidden`、`pid`、
 | auto | `auto on` 武装 → `auto close --app` 最小化 1 个 → `auto undo` 恢复；`auto_close=off` 默认不关 |
 | 多 Agent | 焦点令牌独占/释放/转让；两 Agent 并发 `claim` 同一窗口 → 恰好 1 胜 1 `window_owned_by`；过期租约不挡新 claim |
 | 托盘 | `tray --check` 菜单树包含 模式/全部还原/退出；`autostart status` 结构 |
+| HUD | `hud --check` 有图块、accessibility 为真（截图人工验收缩略图与暗化）|
 
-## 7. 下一步（按优先级）
+## 8. 下一步（按优先级）
 
-1. HUD：ScreenCaptureKit 抓窗 → 缩略图墙 + 暗化 + 入场动画（先补屏幕录制授权）。
+1. HUD 进阶：逐块入场动画、鼠标悬停高亮 + 点击跳转、多屏不同布局；触发点接到 `claim`（`--hud`）。
 2. 借用屏 / 热插拔回滚（与 Windows 同步欠账）。
 3. 软件所有权到进程级（当前粒度是应用名）。
 4. 托盘补充：显示"最近接管/关闭"历史、auto 武装倒计时状态；Windows 侧 `release_all` 同款修复。

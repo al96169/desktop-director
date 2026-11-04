@@ -20,8 +20,8 @@ echo "== swiftc"
 swiftc -O -swift-version 5 -target arm64-apple-macos13.0 \
   -o "$OUT/ddir-mac" \
   Sources/Util.swift Sources/Store.swift Sources/MacWin.swift Sources/Present.swift \
-  Sources/Autostart.swift Sources/Tray.swift Sources/Commands.swift Sources/main.swift \
-  -framework AppKit -framework ApplicationServices
+  Sources/Autostart.swift Sources/Hud.swift Sources/Tray.swift Sources/Commands.swift Sources/main.swift \
+  -framework AppKit -framework ApplicationServices -framework ScreenCaptureKit
 echo "== built $OUT/ddir-mac ($(du -h "$OUT/ddir-mac" | cut -f1))"
 
 if [ "${1:-}" = "--no-install" ]; then

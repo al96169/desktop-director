@@ -160,6 +160,8 @@ check "tray --check ok" "$(echo "$TRAY" | json 'd["ok"]')" "True"
 check "tray menu has 模式" "$(echo "$TRAY" | json 'any(i.get("title")=="模式" for i in d["menu"])')" "True"
 check "tray menu has 全部还原" "$(echo "$TRAY" | json 'any(i.get("title","").startswith("全部还原") for i in d["menu"])')" "True"
 check "tray menu has 退出" "$(echo "$TRAY" | json 'any(i.get("title")=="退出" for i in d["menu"])')" "True"
+check "hud --check ok" "$("$DDIR" hud --check | json 'd["ok"] and d["tiles"] >= 1 and d["accessibility"]')" "True"
+
 check "autostart reports state" "$("$DDIR" autostart status | json 'isinstance(d["enabled"], bool) and d["plist"].endswith(".plist")')" "True"
 
 # cleanup: close only the windows this script opened

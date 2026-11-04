@@ -171,6 +171,10 @@ final class TrayController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
 
+        let hudItem = NSMenuItem(title: "预览 HUD（6 秒）", action: #selector(previewHud), keyEquivalent: "")
+        hudItem.target = self
+        menu.addItem(hudItem)
+
         let logItem = NSMenuItem(title: "查看日志", action: #selector(openLog), keyEquivalent: "")
         logItem.target = self
         menu.addItem(logItem)
@@ -297,6 +301,11 @@ final class TrayController: NSObject, NSMenuDelegate {
         }
         applyManagedUIDs(list)
         store.log("tray: managed_displays=\(list.joined(separator: ","))")
+    }
+
+    @objc private func previewHud() {
+        // the tray already runs an NSApplication loop: build the overlay, don't run another loop
+        _ = HudController.shared.present(seconds: 6)
     }
 
     @objc private func openLog() {

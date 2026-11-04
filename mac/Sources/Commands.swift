@@ -975,6 +975,7 @@ func usage() {
     print("  ddir log [--lines N]                   tail ~/.ddir/ddir.log")
     print("  ddir flush                             drain the paced presentation queue")
     print("  ddir demo                              scripted demo (TextEdit windows)")
+    print("  ddir hud [--seconds N|--check]         dim overlay + thumbnail wall of leased windows")
     print("  ddir tray [--check]                    menu bar app (modes/restore/log/displays/autostart)")
     print("  ddir autostart [on|off|status]         run tray at login (LaunchAgent)")
     print("  ddir board                             human readable overview")

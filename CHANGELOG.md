@@ -1,5 +1,21 @@
 ﻿# Changelog
 
+## 0.9.0 - 2026-11-04
+
+**macOS HUD：暗化 + 缩略图墙**（阶段 1 的"科幻感"层）：
+
+- `ddir hud [--seconds N]`：托管屏暗化 78%，把当前租约窗口摆成卡片墙（缩略图 + `App · 标题` + 坐标 + window-id），
+  淡入 0.35s、到时淡出；`ddir hud --check` 只输出将要展示的 JSON
+- 覆盖窗不抢焦点、点击穿透（`ignoresMouseEvents`、`orderFrontRegardless`、全空间、floating 层）；
+  只覆盖 `managed_displays`，用户屏不碰
+- 缩略图走 **ScreenCaptureKit**：macOS 15 已删除 `CGWindowListCreateImage`，改为
+  `SCShareableContent` + `SCContentFilter(desktopIndependentWindow:)` + `SCScreenshotManager`（14+）；
+  无屏幕录制授权/旧系统时退化为应用图标并注明原因
+- 1s 刷新租约与布局；缩略图按 `ref` 缓存（修掉"每次 tick 重建卡片把缩略图冲掉"）
+- 托盘菜单加「预览 HUD（6 秒）」（复用 `HudController.present`，不嵌套 run loop）
+- `mac/test.sh` 33 项
+- 屏幕录制授权在这台机器上已生效（`screen_recording=true`），HUD 实测有真实缩略图
+
 ## 0.8.0 - 2026-11-04
 
 **macOS 托盘 + 开机自启**（补齐阶段 2 的用户控制面）：

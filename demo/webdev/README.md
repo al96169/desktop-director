@@ -1,4 +1,4 @@
-# web-dev demo（跨平台脚本）
+﻿# web-dev demo（跨平台脚本）
 
 一个"Agent 做网页开发"的演示：**终端里初始化 Vue 项目 → 写组件 → Playwright 驱动 Edge 开多个页面 →
 浏览设计稿 → Finder 看文件 → 预览设计图 → HUD 收尾**。
@@ -35,11 +35,22 @@ python3 demo/webdev/run.py --clean    # 先删旧的工作副本
 
 | 动作 | macOS（已实测） | Windows（代码已写，未实机验证） |
 |---|---|---|
-| 终端 | AppleScript `do script` 开新窗（`open -a` 会重放旧会话）| `cmd /c start powershell -NoExit …` |
+| 终端 | AppleScript `do script` 开新窗（`open -a` 会重放旧会话）| 脚本内同步 scaffold/install，另开 PowerShell 窗口 tail `vite.log`（已实测） |
 | VS Code | `code --new-window` | 同（`code.cmd`） |
-| 文件夹 | `open <dir>` | `explorer <dir>` |
-| 看图 | `open -a Preview a.png b.png` | `os.startfile` |
-| Playwright | `channel: 'msedge'`（用系统 Edge，不下载 Chromium）| 同 |
+| 文件夹 | `open <dir>` | `explorer <dir>`（已实测） |
+| 看图 | `open -a Preview a.png b.png` | `os.startfile` → Photos 窗口（已实测） |
+| Playwright | `channel: 'msedge'`（用系统 Edge，不下载 Chromium）| 同（已实测，窗口 app 名是 `msedge`） |
+
+## Windows 实机结论（2026-11-05）
+
+- `npm exec --yes create-vite@latest shop-web -- --template vue-ts **--no-interactive --no-immediate --overwrite**`
+  少任何一个都会在非 TTY 里 "Operation cancelled"，只留下一个空 `public/`
+- npm/npx/code 是 `.cmd` shim：必须 `cmd /c` 或解析成绝对路径，否则 `CreateProcess` 报 10022/ENOENT
+- subprocess 读输出必须 `encoding="utf-8", errors="replace"`，否则中文 Windows 的 GBK 会抛 `UnicodeDecodeError`
+- Edge 的窗口 app 名是 `msedge`（不是 `Microsoft Edge`），标题才含 "Nova Store"
+- 媒体：`os.startfile` 对未关联的 `.mp4/.m4a` 会弹"如何打开这个文件"，所以 Windows 直接开 Edge 窗口播放
+  （`--autoplay-policy=no-user-gesture-required`），4 个窗口 2x2 平铺
+- 录屏：没有 OBS/ffmpeg 时用 `npm i ffmpeg-static` + `gdigrab`（1920x1080@30），录完 `-ss/-t` 裁掉尾巴
 
 ## 已知点
 

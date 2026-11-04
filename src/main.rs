@@ -815,11 +815,16 @@ fn cmd_auto(args: &[String]) -> i32 {
                 // minimize entries: app \t "" \t minimize \t ts
                 if f.len() >= 3 && f[1].is_empty() && f[2] == "minimize" {
                     let app = f[0].to_string();
-                    if let Some(w) = win::list_windows().into_iter().find(|w| w.app == app && w.minimized) {
+                    // restore every minimized window of that app, not just the first one
+                    let wins: Vec<_> = win::list_windows()
+                        .into_iter()
+                        .filter(|w| w.app == app && w.minimized)
+                        .collect();
+                    for w in wins {
                         unsafe { win::show_raw(w.hwnd) };
-                        store::log(&format!("undo minimize: {}", app));
                         n += 1;
                     }
+                    store::log(&format!("undo minimize: {} (all windows)", app));
                     continue;
                 }
                 if f.len() < 3 || f[1].is_empty() {

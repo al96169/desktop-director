@@ -332,7 +332,7 @@ fn watch_unmanaged_kills() {
                 // window vanished: was it a window of an app that is now gone entirely?
                 let still_has = cur.iter().any(|(_, a)| a == app);
                 if still_has { continue; }
-                if app == "ddir" || app == "explorer" { continue; }
+                if app.eq_ignore_ascii_case("ddir") || app.eq_ignore_ascii_case("explorer") { continue; }
                 if recent_close_audit(app) { continue; }
                 store::log(&format!("unmanaged_kill: {} (window {} disappeared without ddir close)", app, hwnd));
                 store::audit("unmanaged_kill", app);

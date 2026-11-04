@@ -1,5 +1,17 @@
 ﻿# Changelog
 
+## 0.7.1 - 2026-11-04
+
+修复 Agent 反馈的 7 个问题：
+
+- **无参运行 panic**：`ddir` / `ddir --help` 之前会 `args[1..]` 越界，现在正常打印帮助
+- **hide 不写租约**：`hide` 现在记一条 `action=hide` 的租约，`release` 会把窗口重新显示出来
+- **mode 不校验**：`move`/`hide`/`close`/`claim` 在 `off` 档统一返回 `mode_off`
+- **demo 硬编码盘符**：演示目录改为 `~/.ddir/demo`
+- **notepad 大小写**：应用名比较统一走 `eq_ignore_ascii_case`（Win11 的 `Notepad` 也能匹配）
+- **窗口开在主屏导致 claim 找不到**：claim 现在匹配**所有屏幕**的窗口，命中后把它拉到托管屏；`release` 再放回原位置
+- **help 漏命令**：补齐 displays/mode/plan/claim/move/hide/show/close/own/release/heartbeat/focus/auto/config/log/flush/demo/tray/autostart/board/selftest
+
 ## 0.7.0 - 2026-11-04
 
 - 多屏托管：`managed_displays` 配置（`all` / `all_except_primary` / `none` / 逗号分隔的 uid）

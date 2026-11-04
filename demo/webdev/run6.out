@@ -1,0 +1,6 @@
+[01:44:16] demo start · work=C:\Users\54705\ddir-webdev-demo · platform=win32
+[01:44:17] create-vite rc=0
+[01:44:17] scaffold files: ['public']
+[01:44:17] scaffold produced no package.json - aborting this step
+[01:44:17] terminal: npm create vite … npm install … npm run dev
+[01:44:49] dev server did not come up — check the terminal

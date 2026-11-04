@@ -40,3 +40,7 @@ audit.jsonl
 demo/*
 !demo/webdev/
 
+# python / demo logs
+__pycache__/
+*.out
+*.err

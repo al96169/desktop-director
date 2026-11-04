@@ -36,5 +36,7 @@ audit.jsonl
 !dist/*.exe
 !dist/*.zip
 
-demo/
+# 运行时演示目录（`ddir demo` 生成的东西）；但跨平台的演示 playbook 要进仓库
+demo/*
+!demo/webdev/
 

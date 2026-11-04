@@ -21,6 +21,7 @@ const browser = await chromium.launch({
     '--disable-translate',
     '--disable-features=Translate,TranslateUI',
     '--lang=en-US',
+    '--autoplay-policy=no-user-gesture-required',
     '--accept-lang=en-US',
   ],
 });

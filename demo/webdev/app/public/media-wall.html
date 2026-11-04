@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Media wall — Nova Store</title>
+<style>
+:root{--bg:#06090f;--panel:#0c1522;--line:#1b2a3d;--text:#dbe8ff;--dim:#6f89a8;--accent:#39f6ff;--amber:#ffcb45;--pink:#ff7ab6}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(120% 80% at 50% 0%,#0b1626 0%,var(--bg) 70%);color:var(--text);font:14px/1.5 -apple-system,Inter,system-ui,sans-serif;height:100vh;overflow:hidden}
+header{display:flex;align-items:baseline;gap:16px;padding:16px 22px;border-bottom:1px solid var(--line)}
+h1{margin:0;font-size:15px;letter-spacing:4px}
+header .sub{color:var(--dim);font-size:11px;letter-spacing:2px}
+header .live{margin-left:auto;color:var(--accent);font-size:11px;letter-spacing:2px;display:flex;gap:8px;align-items:center}
+header .live i{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+main{display:grid;grid-template-columns:1.35fr .65fr;gap:14px;padding:14px 18px;height:calc(100vh - 54px)}
+.videos{display:grid;grid-template-rows:1fr 1fr;gap:14px;min-height:0}
+.tile{position:relative;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#05080d;min-height:0}
+.tile video{width:100%;height:100%;object-fit:cover;display:block}
+.tile .label{position:absolute;left:12px;bottom:10px;background:rgba(4,8,14,.72);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:11px;letter-spacing:2px;color:var(--text)}
+.tile .badge{position:absolute;left:12px;top:10px;font-size:10px;letter-spacing:2px;color:#06121a;background:var(--accent);padding:2px 8px;border-radius:999px}
+.audio{display:flex;flex-direction:column;gap:14px;min-height:0}
+.card{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:14px;display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+.card h2{margin:0;font-size:11px;letter-spacing:3px;color:var(--accent)}
+.card .src{color:var(--dim);font-size:10px;letter-spacing:1px}
+.wave{display:flex;align-items:flex-end;gap:4px;flex:1;min-height:64px}
+.wave i{flex:1;height:100%;background:linear-gradient(180deg,var(--accent),#1d5f73);border-radius:2px;transform-origin:bottom;animation:eq 1.1s ease-in-out infinite}
+.card.amber .wave i{background:linear-gradient(180deg,var(--amber),#7a5a12)}
+.wave i:nth-child(odd){animation-duration:.9s}
+.wave i:nth-child(3n){animation-duration:1.35s}
+@keyframes eq{0%,100%{transform:scaleY(.25)}50%{transform:scaleY(1)}}
+.meta{display:flex;justify-content:space-between;color:var(--dim);font-size:10px;letter-spacing:1px}
+button{border:1px solid var(--line);background:#0a121e;color:var(--text);border-radius:8px;padding:6px 10px;font-size:11px;letter-spacing:1px;cursor:pointer}
+button.on{border-color:var(--accent);color:var(--accent)}
+audio{display:none}
+</style></head>
+<body>
+<header><h1>MEDIA WALL</h1><span class="sub">NOVA STORE · 2 VIDEO + 2 AUDIO · SIMULTANEOUS</span>
+  <span class="live"><i></i>4 STREAMS LIVE</span></header>
+<main>
+  <section class="videos">
+    <div class="tile"><span class="badge">VIDEO 01</span><video id="v1" src="media/nebula.mp4" muted loop playsinline autoplay></video><span class="label">JWST · CARINA NEBULA</span></div>
+    <div class="tile"><span class="badge">VIDEO 02</span><video id="v2" src="media/galaxy.mp4" muted loop playsinline autoplay></video><span class="label">HUBBLE · SPIRAL GALAXY</span></div>
+  </section>
+  <aside class="audio">
+    <div class="card" id="c1"><h2>AUDIO 01</h2><div class="src">yd · "Another space background track" · CC0</div>
+      <div class="wave"></div>
+      <div class="meta"><span id="t1">0:00</span><button id="b1" class="on">PAUSE</button></div>
+      <audio id="a1" src="media/ambient-space.m4a" loop autoplay></audio></div>
+    <div class="card amber" id="c2"><h2>AUDIO 02</h2><div class="src">ddir generated pad · C minor</div>
+      <div class="wave"></div>
+      <div class="meta"><span id="t2">0:00</span><button id="b2" class="on">PAUSE</button></div>
+      <audio id="a2" src="media/ambient-pad.m4a" loop autoplay></audio></div>
+  </aside>
+</main>
+<script>
+// build equaliser bars
+document.querySelectorAll('.wave').forEach(w => { for (let i = 0; i < 26; i++) w.appendChild(document.createElement('i')); });
+const pairs = [['a1','b1','t1'],['a2','b2','t2']];
+for (const [aid, bid, tid] of pairs) {
+  const a = document.getElementById(aid), b = document.getElementById(bid), t = document.getElementById(tid);
+  const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  a.addEventListener('timeupdate', () => { t.textContent = fmt(a.currentTime) + ' / ' + (isNaN(a.duration) ? '0:20' : fmt(a.duration)); });
+  b.addEventListener('click', () => { if (a.paused) { a.play(); b.classList.add('on'); b.textContent = 'PAUSE'; } else { a.pause(); b.classList.remove('on'); b.textContent = 'PLAY'; } });
+  // some browsers still gate audio until a gesture; try, and fall back to muted autoplay
+  a.play().catch(() => { a.muted = true; a.play().catch(() => {}); });
+}
+</script></body></html>

@@ -274,6 +274,22 @@ def edge_profile() -> Path:
     return prof
 
 
+def open_media(path: Path) -> dict | None:
+    """Open a file in a native player window (AVFoundation on macOS; the OS default player on Windows)."""
+    before = {w["hwnd"] for w in windows()}
+    if IS_MAC:
+        subprocess.Popen([DDIR, "play", str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(1.6)
+        return remember(wait_new("Ddir", before, timeout=8))
+    if IS_WIN:
+        os.startfile(str(path))  # type: ignore[attr-defined]
+        time.sleep(2.0)
+        return None
+    subprocess.Popen(["xdg-open", str(path)])
+    time.sleep(2.0)
+    return None
+
+
 def open_playwright(urls: list[str], stay: int = 180) -> subprocess.Popen | None:
     global pw_proc
     pw = HERE / "pw"
@@ -468,6 +484,32 @@ def run(fast: bool, keep: bool) -> None:
             opened.append((ref, "Microsoft Edge"))
     tile(edge[:3])
     sleep(3)
+    hud("toast", 3)
+
+    # 4b. media: two native video players + two native audio players, all playing at once
+    ddir("release")
+    media = ["brand-film.mp4", "product-teaser.mp4", "customer-call.m4a", "standup-notes.m4a"]
+    refs = []
+    for name in media:
+        f = WORK / "shop-web" / "public" / "media" / name
+        win_ = open_media(f)
+        if win_:
+            refs.append(win_["hwnd"])
+    # 2x2 media wall: two video players on top, two audio players below
+    x, y, w, h = work_area()
+    gap = 12
+    half_w = (w - 3 * gap) // 2
+    half_h = (h - 3 * gap) // 2
+    cells = [
+        (x + gap, y + gap, half_w, half_h),
+        (x + 2 * gap + half_w, y + gap, half_w, half_h),
+        (x + gap, y + 2 * gap + half_h, half_w, half_h),
+        (x + 2 * gap + half_w, y + 2 * gap + half_h, half_w, half_h),
+    ]
+    for ref, (cx, cy, cw, ch) in zip(refs, cells):
+        ddir("move", "--window", ref, "--rect", f"{cx},{cy},{cw},{ch}", "--force")
+    log(f"media: {len(refs)} native players tiled")
+    sleep(6)
     hud("toast", 3)
 
     # 5. design references + the folder + the mockups

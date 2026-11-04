@@ -1,0 +1,4 @@
+  File "F:\desktop-director\demo\webdev\run.py", line 368
+    'def edge_exe() -> str:
+                           ^
+SyntaxError: EOL while scanning string literal

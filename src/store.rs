@@ -198,6 +198,16 @@ pub fn config_set(key: &str, value: &str) -> Result<(), String> {
                 return Err("auto_close must be off|minimize|close".into());
             }
         }
+        "presentation" => {
+            if !["instant", "paced"].contains(&value) {
+                return Err("presentation must be instant|paced".into());
+            }
+        }
+        "step_ms" => {
+            if value.parse::<u64>().map(|n| (50..=5000).contains(&n)).unwrap_or(false) == false {
+                return Err("step_ms must be 50..5000".into());
+            }
+        }
         "countdown_seconds" => {
             if value.parse::<u64>().map(|n| n <= 300).unwrap_or(false) == false {
                 return Err("countdown_seconds must be 0..300".into());

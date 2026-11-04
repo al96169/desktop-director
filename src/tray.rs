@@ -305,6 +305,46 @@ fn project_dir() -> String {
     exe.parent().map(|p| p.display().to_string()).unwrap_or_else(|| ".".into())
 }
 
+static mut WATCH: Option<Vec<(isize, String)>> = None;
+
+fn recent_close_audit(app: &str) -> bool {
+    // look for a close / auto_close audit line for this app in the last 20 seconds
+    let now = store::now_unix();
+    let txt = std::fs::read_to_string(store::home().join("audit.tsv")).unwrap_or_default();
+    for line in txt.lines().rev().take(200) {
+        let f: Vec<&str> = line.split('\t').collect();
+        if f.len() < 3 { continue; }
+        let ts: u64 = f[0].parse().unwrap_or(0);
+        if now.saturating_sub(ts) > 20 { break; }
+        if (f[1] == "close" || f[1] == "auto_close" || f[1] == "auto_minimize") && f[2].contains(app) {
+            return true;
+        }
+    }
+    false
+}
+
+fn watch_unmanaged_kills() {
+    let cur: Vec<(isize, String)> = win::list_windows().into_iter().map(|w| (w.hwnd, w.app)).collect();
+    unsafe {
+        if let Some(prev) = WATCH.as_ref() {
+            for (hwnd, app) in prev.iter() {
+                if cur.iter().any(|(h, _)| h == hwnd) { continue; }
+                // window vanished: was it a window of an app that is now gone entirely?
+                let still_has = cur.iter().any(|(_, a)| a == app);
+                if still_has { continue; }
+                if app == "ddir" || app == "explorer" { continue; }
+                if recent_close_audit(app) { continue; }
+                store::log(&format!("unmanaged_kill: {} (window {} disappeared without ddir close)", app, hwnd));
+                store::audit("unmanaged_kill", app);
+                if store::config_get("downgrade_on_unmanaged_kill").as_deref() == Some("true") {
+                    let _ = store::set_mode("semi");
+                    store::log("unmanaged_kill: downgraded to semi");
+                }
+            }
+        }
+        WATCH = Some(cur);
+    }
+}
 extern "system" fn wnd_proc(hwnd: Hwnd, msg: u32, wp: usize, lp: isize) -> isize {
     unsafe {
         match msg {
@@ -316,6 +356,7 @@ extern "system" fn wnd_proc(hwnd: Hwnd, msg: u32, wp: usize, lp: isize) -> isize
             }
             WM_TIMER => {
                 crate::present::tick();
+                watch_unmanaged_kills();
                 let mut probe: NotifyIconDataW = std::mem::zeroed();
                 probe.cb_size = std::mem::size_of::<NotifyIconDataW>() as u32;
                 probe.hwnd = hwnd;

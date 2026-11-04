@@ -150,6 +150,16 @@ fn matches(w: &WinInfo, name: &str) -> bool {
 
 // ---------- commands ----------
 
+fn mode_guard() -> bool {
+    if store::mode() == "off" {
+        println!("{{\"ok\":false,\"error\":\"mode_off\",\"hint\":\"ddir mode semi|auto 再操作\"}}");
+        return false;
+    }
+    true
+}
+
+fn same_app(a: &str, b: &str) -> bool { a.eq_ignore_ascii_case(b) }
+
 fn cmd_mode(args: &[String]) -> i32 {
     if let Some(m) = positional(args).first() {
         if let Err(e) = store::set_mode(m) {
@@ -330,10 +340,9 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
     let busy: Vec<store::Lease> = live.iter().filter(|l| l.agent != me).cloned().collect();
 
     let managed_ids: Vec<String> = managed.iter().map(|d| d.uid.clone()).collect();
-    let wins: Vec<WinInfo> = win::list_windows()
-        .into_iter()
-        .filter(|w| managed_ids.contains(&w.display))
-        .collect();
+    // A freshly opened app usually lands on the primary (user) display. Match against every
+    // window and let claim pull it onto a managed display; release puts it back where it was.
+    let wins: Vec<WinInfo> = win::list_windows();
 
     // Start from what this agent already holds, then add whatever the new request needs.
     // Everything gets laid out again, so opening a new window never buries the old ones.
@@ -403,7 +412,7 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
         .map(|(w, r, l, f)| {
             format!(
                 "{{\"window\":\"{}\",\"app\":\"{}\",\"title\":\"{}\",\"display\":\"{}\",\"from\":{},\"rect\":{},\"retiled\":{}}}",
-                w.hex, esc(&w.app), esc(&w.title), esc(&w.display), rect_json(f), rect_json(r), l.is_some()
+                w.hex, esc(&w.app), esc(&w.title), esc(&managed[0].uid), rect_json(f), rect_json(r), l.is_some()
             )
         })
         .collect();
@@ -477,6 +486,7 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
     0
 }
 fn cmd_move(args: &[String]) -> i32 {
+    if !mode_guard() { return 0; }
     let hwnd = match arg(args, "--window").and_then(|s| win::parse_hwnd(&s)) {
         Some(h) => h,
         None => {
@@ -505,6 +515,7 @@ fn cmd_move(args: &[String]) -> i32 {
 }
 
 fn cmd_show_hide(args: &[String], hide: bool) -> i32 {
+    if hide && !mode_guard() { return 0; }
     let hwnd = match arg(args, "--window").and_then(|s| win::parse_hwnd(&s)) {
         Some(h) => h,
         None => {
@@ -513,6 +524,26 @@ fn cmd_show_hide(args: &[String], hide: bool) -> i32 {
         }
     };
     if hide {
+        let me = win::agent_id();
+        if let Some(w) = win::list_windows().into_iter().find(|w| w.hwnd == hwnd) {
+            let _g = store::lock();
+            let now = store::now_unix();
+            let mut leases = store::leases();
+            leases.retain(|l| !(l.agent == me && l.window.eq_ignore_ascii_case(&w.hex)));
+            leases.push(store::Lease {
+                window: w.hex.clone(),
+                agent: me,
+                action: "hide".into(),
+                from: w.win,
+                to: w.win,
+                expires: now + LEASE_TTL,
+                lease: format!("ls_hide_{:06x}", now as u32),
+                priority: "normal".into(),
+                since: now,
+            });
+            store::save_leases(&leases);
+            store::log(&format!("hide {} (lease recorded)", w.hex));
+        }
         win::hide(hwnd);
     } else {
         win::show(hwnd);
@@ -534,6 +565,7 @@ fn owned_by_me(app: &str, me: &str) -> Result<(), String> {
 }
 
 fn cmd_close(args: &[String]) -> i32 {
+    if !mode_guard() { return 0; }
     let hwnd = match arg(args, "--window").and_then(|s| win::parse_hwnd(&s)) {
         Some(h) => h,
         None => {
@@ -724,7 +756,7 @@ fn candidates(only: Option<&str>) -> Vec<Candidate> {
         if let Some(name) = only {
             if !w.app.eq_ignore_ascii_case(name) && !w.title.to_lowercase().contains(&name.to_lowercase()) { continue; }
         } else {
-            if w.app.eq_ignore_ascii_case(&fg) || agents_own(&w.app) || w.app == "explorer" || w.app == "ddir" { continue; }
+            if w.app.eq_ignore_ascii_case(&fg) || agents_own(&w.app) || same_app(&w.app, "explorer") || same_app(&w.app, "ddir") { continue; }
         }
         match out.iter_mut().find(|c| c.app == w.app) {
             Some(c) => { c.windows += 1; c.hexes.push(w.hex.clone()); if !c.pids.contains(&w.pid) { c.pids.push(w.pid); } }
@@ -976,7 +1008,7 @@ fn cmd_flush() -> i32 {
 }
 
 fn cmd_demo(args: &[String]) -> i32 {
-    let dir = std::path::PathBuf::from(r"F:\desktop-director\demo");
+    let dir = store::home().join("demo");
     let _ = std::fs::create_dir_all(&dir);
     let files = [("a.txt", "alpha\nbeta\ngamma\n"), ("b.txt", "one\ntwo\nthree\n"), ("c.txt", "red\ngreen\nblue\n")];
     for (name, body) in files.iter() {
@@ -997,11 +1029,11 @@ fn cmd_demo(args: &[String]) -> i32 {
     let mut lease = String::new();
     for (i, (name, _)) in files.iter().enumerate() {
         let path = dir.join(name);
-        let before: Vec<isize> = win::list_windows().iter().filter(|w| w.app == "notepad").map(|w| w.hwnd).collect();
+        let before: Vec<isize> = win::list_windows().iter().filter(|w| same_app(&w.app, "notepad")).map(|w| w.hwnd).collect();
         let _ = std::process::Command::new("notepad.exe").arg(&path).spawn();
         std::thread::sleep(std::time::Duration::from_millis(900));
         for w in win::list_windows() {
-            if w.app == "notepad" && !before.contains(&w.hwnd) {
+            if same_app(&w.app, "notepad") && !before.contains(&w.hwnd) {
                 opened.push(w.hwnd);
             }
         }
@@ -1163,19 +1195,28 @@ fn cmd_selftest() -> i32 {
 fn usage() {
     println!("ddir {} - Desktop Director (Windows backend)", VERSION);
     println!();
-    println!("  ddir mode [off|semi|auto]        show/switch mode");
-    println!("  ddir displays                    managed/user displays (json)");
-    println!("  ddir list [--text]               windows (filtered to Alt-Tab level)");
-    println!("  ddir status                      leases / owned apps / activity (json)");
-    println!("  ddir plan [--needs \"a,b\"]        dry-run layout");
-    println!("  ddir claim [--needs \"a,b\"] [--force]");
+    println!("  ddir mode [off|semi|auto]              show/switch mode");
+    println!("  ddir displays [--manage UID [--off]]   list / hand displays to the agent");
+    println!("  ddir list [--text]                     windows (Alt-Tab level)");
+    println!("  ddir status                            leases / owned apps / focus (json)");
+    println!("  ddir plan [--needs \"a,b\"] [--priority P]   dry-run layout");
+    println!("  ddir claim [--needs \"a,b\"] [--force] [--priority P] [--present paced]");
     println!("  ddir move --window 0x.. --rect x,y,w,h [--force]");
-    println!("  ddir hide|show --window 0x..");
-    println!("  ddir close --window 0x..         WM_CLOSE, owned apps only");
-    println!("  ddir own --app <name> | disown --app <name>");
-    println!("  ddir release                     restore my leases");
-    println!("  ddir board                       human readable overview");
-    println!("  ddir selftest                    platform conformance checks");
+    println!("  ddir hide|show --window 0x..           hide records a lease; release restores");
+    println!("  ddir close --window 0x..               WM_CLOSE, owned apps only");
+    println!("  ddir own --app <n> | disown --app <n>  software ownership");
+    println!("  ddir release                           restore my leases");
+    println!("  ddir heartbeat                         renew my lease TTL");
+    println!("  ddir focus [--seconds N] | focus release   focus token");
+    println!("  ddir auto status|plan|on|close|undo    auto-mode pipeline");
+    println!("  ddir config [key value]                view/update config");
+    println!("  ddir log [--lines N]                   tail ~/.ddir/ddir.log");
+    println!("  ddir flush                             drain the paced presentation queue");
+    println!("  ddir demo                              scripted demo (opens/closes its own windows)");
+    println!("  ddir tray                              tray icon (modes/restore/log/autostart)");
+    println!("  ddir autostart [on|off|status]         run tray at login");
+    println!("  ddir board                             human readable overview");
+    println!("  ddir selftest                          platform conformance checks");
     println!();
     println!("env: DDIR_HOME (default ~/.ddir), DDIR_AGENT (identity override)");
 }
@@ -1184,7 +1225,7 @@ fn main() {
     store::ensure_home();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = args.first().map(|s| s.to_lowercase()).unwrap_or_else(|| "help".into());
-    let rest = &args[1..];
+    let rest: &[String] = if args.len() > 1 { &args[1..] } else { &[] };
     let code = match cmd.as_str() {
         "mode" => cmd_mode(rest),
         "displays" => cmd_displays(rest),
@@ -1212,6 +1253,10 @@ fn main() {
         "log" | "logs" => cmd_log(rest),
         "version" | "--version" | "-V" => {
             println!("ddir {} (windows)", VERSION);
+            0
+        }
+        "help" | "--help" | "-h" => {
+            usage();
             0
         }
         _ => {

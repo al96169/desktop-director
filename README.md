@@ -46,13 +46,23 @@ cargo build --release
 target\release\ddir.exe selftest
 ```
 
+## 配置与日志
+
+配置文件 `~/.ddir/config.ini`（`ddir config` 查看，`ddir config <key> <value>` 修改）：
+
+| key | 取值 | 默认 | 说明 |
+|---|---|---|---|
+| `auto_close` | `off` / `minimize` / `close` | **off** | auto 档是否动软件窗口：永不关 / 最小化代替关闭 / 允许 `WM_CLOSE` |
+| `countdown_seconds` | 0–300 | 10 | `ddir auto on` 的武装倒计时 |
+
+日志 `~/.ddir/ddir.log`：每条命令一行（时间 + 动作），`ddir log --lines 40` 查看，托盘右键「查看日志」也能打开。超过 2MB 自动轮转成 `ddir.log.1`。
 ## 三档模式
 
 | 档位 | 屏幕 | 窗口 | 软件 |
 |---|---|---|---|
 | **off** | 不碰 | 不碰 | 不碰 |
 | **semi**（默认） | **仅托管屏**（默认除主屏外全部；新插的屏默认归用户） | 只摆自己拥有的窗口，不越界、不抢焦点 | 只关自己 spawn 的进程，其他只隐藏 |
-| **auto** | 全部（可留保留屏） | 可摆所有非保护窗口，空闲时抢焦点 | **可关闭**：先 30s 武装倒计时 → 只发 `WM_CLOSE` → 关不掉不强杀 → 可一键重启撤销 |
+| **auto** | 全部（可留保留屏） | 可摆所有非保护窗口，空闲时抢焦点 | 按配置：`off`（默认，只摆窗口不关）/ `minimize`（最小化代替关闭）/ `close`（先 10s 武装 → 只发 `WM_CLOSE` → 关不掉不强杀 → 可 `auto undo`） |
 
 ## 三类资源 · 三条不变量
 

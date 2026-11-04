@@ -156,6 +156,7 @@ fn cmd_mode(args: &[String]) -> i32 {
             return 1;
         }
         store::audit("mode", m);
+        store::log(&format!("mode -> {}", m));
     }
     let (idle, moved, fg, active) = activity();
     println!(
@@ -401,6 +402,7 @@ fn cmd_claim(args: &[String], dry: bool) -> i32 {
     store::save_leases(&all);
     let retiled = plan.iter().filter(|(_, _, l, _)| l.is_some()).count();
     store::audit("claim", &format!("lease={} windows={} retiled={}", lease_id, plan.len(), retiled));
+    store::log(&format!("claim lease={} windows={} retiled={}", lease_id, plan.len(), retiled));
     println!(
         "{{\"ok\":true,\"lease\":\"{}\",\"mode\":\"{}\",\"displays_managed\":[{}],\"assign\":[{}],\"retiled\":{},\"focus\":\"none\",\"ttl_s\":{}}}",
         lease_id, esc(&mode), managed_uid_json, assign_json.join(","), retiled, LEASE_TTL
@@ -573,6 +575,7 @@ pub fn release_all() -> (usize, usize) {
     }
     store::save_leases(&others);
     store::audit("release", &format!("restored={}", n));
+    store::log(&format!("release restored={}", n));
     (n, others.len())
 }
 
@@ -688,7 +691,7 @@ fn cmd_auto(args: &[String]) -> i32 {
                 println!("{{\"ok\":false,\"error\":\"mode_not_auto\",\"hint\":\"先 ddir mode auto（或托盘切到全自动）再武装\"}}");
                 return 0;
             }
-            let secs: u64 = arg(args, "--seconds").and_then(|s| s.parse().ok()).unwrap_or(10);
+            let secs: u64 = arg(args, "--seconds").and_then(|s| s.parse().ok()).unwrap_or_else(|| store::config_get("countdown_seconds").and_then(|v| v.parse().ok()).unwrap_or(10));
             let cs = candidates(None);
             let names: Vec<String> = cs.iter().map(|c| format!("{}({}窗口)", c.app, c.windows)).collect();
             println!("== 将接管（只是候选，不会立刻关闭）");
@@ -734,6 +737,12 @@ fn cmd_auto(args: &[String]) -> i32 {
                 println!("{{\"ok\":false,\"error\":\"needs_user_consent\",\"hint\":\"先 ddir auto on 武装（倒计时确认）\"}}");
                 return 0;
             }
+            let auto_close = store::config_get("auto_close").unwrap_or_else(|| "off".into());
+            if auto_close == "off" {
+                store::log("auto close 被配置拒绝（auto_close=off）");
+                println!("{{\"ok\":false,\"error\":\"auto_close_disabled\",\"hint\":\"配置 auto_close=off，不会自动关任何窗口。需要时 ddir config auto_close minimize|close\"}}");
+                return 0;
+            }
             let explicit = arg(args, "--app");
             if explicit.is_none() && !has_flag(args, "--force") {
                 println!("{{\"ok\":false,\"error\":\"needs_explicit_target\",\"hint\":\"自动挑目标很容易关错东西：用 --app <名字> 指定，或加 --force 让它自己挑（最多 3 个）\"}}");
@@ -748,6 +757,22 @@ fn cmd_auto(args: &[String]) -> i32 {
                 let path = win::exe_path(c.pids[0]);
                 let first = win::list_windows().into_iter().find(|w| w.app == c.app);
                 let rect = first.as_ref().map(|w| w.win).unwrap_or([0, 0, 0, 0]);
+                if auto_close == "minimize" {
+                    for hex in &c.hexes {
+                        if let Some(h) = win::parse_hwnd(hex) {
+                            unsafe { win::minimize(h) };
+                        }
+                    }
+                    let line = format!("{}\t\tminimize\t{}\n", c.app, store::now_unix());
+                    use std::io::Write;
+                    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(closed_path()) {
+                        let _ = f.write_all(line.as_bytes());
+                    }
+                    store::log(&format!("auto minimize: {}", c.app));
+                    println!("已最小化：{}（auto_close=minimize）", c.app);
+                    closed += 1;
+                    continue;
+                }
                 for hex in &c.hexes {
                     if let Some(h) = win::parse_hwnd(hex) {
                         win::close_graceful(h);
@@ -786,6 +811,17 @@ fn cmd_auto(args: &[String]) -> i32 {
             let mut n = 0;
             for line in txt.lines() {
                 let f: Vec<&str> = line.split('\t').collect();
+                if f.is_empty() { continue; }
+                // minimize entries: app \t "" \t minimize \t ts
+                if f.len() >= 3 && f[1].is_empty() && f[2] == "minimize" {
+                    let app = f[0].to_string();
+                    if let Some(w) = win::list_windows().into_iter().find(|w| w.app == app && w.minimized) {
+                        unsafe { win::show_raw(w.hwnd) };
+                        store::log(&format!("undo minimize: {}", app));
+                        n += 1;
+                    }
+                    continue;
+                }
                 if f.len() < 3 || f[1].is_empty() {
                     continue;
                 }
@@ -811,6 +847,50 @@ fn cmd_auto(args: &[String]) -> i32 {
             println!("{{\"ok\":true,\"relaunched\":{}}}", n);
         }
         _ => println!("{{\"ok\":false,\"error\":\"unknown_auto_subcmd\"}}"),
+    }
+    0
+}
+fn cmd_config(args: &[String]) -> i32 {
+    let pos = positional(args);
+    if pos.is_empty() {
+        let mut all = store::config_all();
+        for (k, v) in [("auto_close", "off"), ("countdown_seconds", "10")] {
+            if !all.iter().any(|(key, _)| key == k) {
+                all.push((k.to_string(), v.to_string()));
+            }
+        }
+        let rows: Vec<String> = all.iter()
+            .map(|(k, v)| format!("{{\"{}\":\"{}\"}}", esc(k), esc(v)))
+            .collect();
+        println!("{{\"ok\":true,\"path\":\"{}\",\"config\":[{}]}}", esc(&store::config_path().display().to_string()), rows.join(","));
+        return 0;
+    }
+    let (key, value) = if pos.len() >= 2 {
+        (pos[0].clone(), pos[1].clone())
+    } else if let Some((k, v)) = pos[0].split_once('=') {
+        (k.to_string(), v.to_string())
+    } else {
+        println!("{{\"ok\":false,\"error\":\"invalid_args\",\"hint\":\"config <key> <value>  或  config key=value\"}}");
+        return 0;
+    };
+    match store::config_set(&key, &value) {
+        Ok(_) => {
+            store::log(&format!("config {}={}", key, value));
+            println!("{{\"ok\":true,\"{}\":\"{}\"}}", esc(&key), esc(&value));
+        }
+        Err(e) => println!("{{\"ok\":false,\"error\":\"{}\"}}", esc(&e)),
+    }
+    0
+}
+
+fn cmd_log(args: &[String]) -> i32 {
+    let n: usize = arg(args, "--lines").and_then(|s| s.parse().ok()).unwrap_or(40);
+    let lines = store::log_tail(n);
+    for l in &lines {
+        println!("{}", l);
+    }
+    if lines.is_empty() {
+        println!("(log is empty)");
     }
     0
 }
@@ -907,6 +987,8 @@ fn main() {
         "tray" => tray::run(),
         "autostart" => cmd_autostart(rest),
         "auto" => cmd_auto(rest),
+        "config" => cmd_config(rest),
+        "log" | "logs" => cmd_log(rest),
         "version" | "--version" | "-V" => {
             println!("ddir {} (windows)", VERSION);
             0

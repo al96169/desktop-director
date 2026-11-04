@@ -46,6 +46,10 @@ const CMD_LIST: usize = 104;
 const CMD_AUTOSTART: usize = 105;
 const CMD_FOLDER: usize = 106;
 const CMD_EXIT: usize = 107;
+const CMD_LOG: usize = 108;
+const CMD_AC_OFF: usize = 109;
+const CMD_AC_MIN: usize = 110;
+const CMD_AC_CLOSE: usize = 111;
 
 #[repr(C)]
 struct WndClassW {
@@ -216,6 +220,14 @@ unsafe fn build_menu() -> isize {
     AppendMenuW(menu, MF_POPUP, sub as usize, sub_w.as_ptr());
 
     menu_item_str(menu, MF_STRING, CMD_RELEASE, "全部还原");
+    let ac = store::config_get("auto_close").unwrap_or_else(|| "off".into());
+    let acmenu = CreatePopupMenu();
+    menu_item_str(acmenu, MF_STRING | if ac == "off" { MF_CHECKED } else { 0 }, CMD_AC_OFF, "off（永不自动关窗口）");
+    menu_item_str(acmenu, MF_STRING | if ac == "minimize" { MF_CHECKED } else { 0 }, CMD_AC_MIN, "minimize（最小化代替关闭）");
+    menu_item_str(acmenu, MF_STRING | if ac == "close" { MF_CHECKED } else { 0 }, CMD_AC_CLOSE, "close（允许关闭，需先武装）");
+    let acw = wide("自动关闭");
+    AppendMenuW(menu, MF_POPUP, acmenu as usize, acw.as_ptr());
+    menu_item_str(menu, MF_STRING, CMD_LOG, "查看日志");
     menu_item_str(menu, MF_STRING, CMD_LIST, "窗口列表（前 8 个）");
     let auto_flag = if autostart_on() { MF_CHECKED } else { 0 };
     menu_item_str(menu, MF_STRING | auto_flag, CMD_AUTOSTART, "开机自启");
@@ -265,6 +277,17 @@ unsafe fn show_menu(hwnd: Hwnd, nid: &mut NotifyIconDataW) {
             let enabled = autostart_set(!now);
             refresh_icon(nid);
             balloon(nid, "ddir", if enabled { "已设置开机自启" } else { "已取消开机自启" });
+        }
+        CMD_LOG => {
+            let p = store::log_path();
+            let _ = std::process::Command::new("notepad.exe").arg(&p).spawn();
+            balloon(nid, "ddir", "已打开日志：~/.ddir/ddir.log");
+        }
+        CMD_AC_OFF | CMD_AC_MIN | CMD_AC_CLOSE => {
+            let v = match cmd { CMD_AC_OFF => "off", CMD_AC_MIN => "minimize", _ => "close" };
+            let _ = store::config_set("auto_close", v);
+            store::log(&format!("tray: auto_close={}", v));
+            balloon(nid, "ddir", &format!("自动关闭策略：{}", v));
         }
         CMD_FOLDER => {
             let _ = std::process::Command::new("explorer.exe").arg(project_dir()).spawn();

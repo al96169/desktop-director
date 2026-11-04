@@ -161,3 +161,84 @@ pub fn audit(op: &str, detail: &str) {
         let _ = f.write_all(line.as_bytes());
     }
 }
+// ---------- config (key=value) ----------
+
+pub fn config_path() -> PathBuf { home().join("config.ini") }
+
+pub fn config_get(key: &str) -> Option<String> {
+    let txt = fs::read_to_string(config_path()).ok()?;
+    for line in txt.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') { continue; }
+        if let Some((k, v)) = line.split_once('=') {
+            if k.trim() == key { return Some(v.trim().to_string()); }
+        }
+    }
+    None
+}
+
+pub fn config_all() -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    if let Ok(txt) = fs::read_to_string(config_path()) {
+        for line in txt.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') { continue; }
+            if let Some((k, v)) = line.split_once('=') {
+                out.push((k.trim().to_string(), v.trim().to_string()));
+            }
+        }
+    }
+    out
+}
+
+pub fn config_set(key: &str, value: &str) -> Result<(), String> {
+    match key {
+        "auto_close" => {
+            if !["off", "minimize", "close"].contains(&value) {
+                return Err("auto_close must be off|minimize|close".into());
+            }
+        }
+        "countdown_seconds" => {
+            if value.parse::<u64>().map(|n| n <= 300).unwrap_or(false) == false {
+                return Err("countdown_seconds must be 0..300".into());
+            }
+        }
+        _ => return Err(format!("unknown key: {}", key)),
+    }
+    let mut map: Vec<(String, String)> = config_all();
+    match map.iter_mut().find(|(k, _)| k == key) {
+        Some(e) => e.1 = value.to_string(),
+        None => map.push((key.to_string(), value.to_string())),
+    }
+    ensure_home();
+    let mut s = String::from("# ddir config (edited by `ddir config`)\n");
+    s.push_str("# auto_close: off = 永不自动关窗口 / minimize = 最小化代替关闭 / close = WM_CLOSE\n");
+    for (k, v) in map { s.push_str(&format!("{}={}\n", k, v)); }
+    fs::write(config_path(), s).map_err(|e| e.to_string())
+}
+
+// ---------- user-facing log ----------
+
+pub fn log_path() -> PathBuf { home().join("ddir.log") }
+
+pub fn log(msg: &str) {
+    ensure_home();
+    let p = log_path();
+    if let Ok(md) = fs::metadata(&p) {
+        if md.len() > 2 * 1024 * 1024 {
+            let _ = fs::rename(&p, home().join("ddir.log.1"));
+        }
+    }
+    let line = format!("{}  {}\n", crate::win::now_string(), msg.replace('\n', " "));
+    use std::io::Write;
+    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&p) {
+        let _ = f.write_all(line.as_bytes());
+    }
+}
+
+pub fn log_tail(n: usize) -> Vec<String> {
+    let txt = fs::read_to_string(log_path()).unwrap_or_default();
+    let lines: Vec<&str> = txt.lines().collect();
+    let start = lines.len().saturating_sub(n);
+    lines[start..].iter().map(|s| s.to_string()).collect()
+}

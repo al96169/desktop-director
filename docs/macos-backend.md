@@ -53,7 +53,7 @@ ddir autostart on|off|status   # ~/Library/LaunchAgents/com.ddir.mac.tray.plist
 cd ~/desktop-director
 ./mac/build.sh              # swiftc -> Ddir.app -> codesign(ddir-dev) -> ~/.local/bin/ddir
 ./mac/build.sh --no-install # 只编译（产物 mac/build/ddir-mac）
-./mac/test.sh               # 15 项验收（TextEdit，只用自己开的窗口）
+./mac/test.sh               # 32 项验收（TextEdit，只用自己开的窗口）
 ```
 
 * App 固定在 `~/Applications/Ddir.app`，bundle id `com.ddir.mac`，可执行文件 `Contents/MacOS/Ddir`。
@@ -107,6 +107,18 @@ JSON 里额外提供了 `actual`（move 后的读回值）、`hidden`、`pid`、
    因为不在同一个 session；排障时用 `launchctl print gui/$(id -u)/com.ddir.mac.tray` 看状态。
 8. **Windows 的托盘 `全部还原` 有同样的身份问题**（`src/tray.rs` 调 `release_all()`，只释放托盘进程自己的租约）。
    macOS 侧已用 `force: true` 修正；Windows 侧待确认/修复。
+
+### 验收覆盖（`mac/test.sh`，32 项）
+
+| 组 | 覆盖 |
+|---|---|
+| 平台 | `selftest` 7 项 / 窗口数 / 标题非空 |
+| 几何 | `move` 读回一致（≤1pt）；`claim` 等宽 816+816 不重叠；`release` 还原到 claim 前的位置 |
+| 可见性 | `hide`（应用级）标记 `hidden=true`，`release` 恢复 |
+| 生命周期 | `own` 后 `close` 关窗且进程存活；未 `own` 拒绝 `not_owned`；`mode_off` 拒绝写操作 |
+| auto | `auto on` 武装 → `auto close --app` 最小化 1 个 → `auto undo` 恢复；`auto_close=off` 默认不关 |
+| 多 Agent | 焦点令牌独占/释放/转让；两 Agent 并发 `claim` 同一窗口 → 恰好 1 胜 1 `window_owned_by`；过期租约不挡新 claim |
+| 托盘 | `tray --check` 菜单树包含 模式/全部还原/退出；`autostart status` 结构 |
 
 ## 7. 下一步（按优先级）
 

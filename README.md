@@ -65,7 +65,7 @@ ddir claim --needs "a.txt,b.txt" --force   # 等宽并排
 ddir release            # 还原
 ddir tray               # 菜单栏常驻（三档/全部还原/日志/托管屏/自启）
 ddir autostart on       # 登录时自动起托盘（LaunchAgent）
-./mac/test.sh           # 20 项验收（只用 TextEdit 和它自己开的窗口）
+./mac/test.sh           # 32 项验收（只用 TextEdit 和它自己开的窗口）
 ```
 
 macOS 的权限与平台差异（`hide` 只能整应用、`close` 不退进程、window-id 不是 hwnd）见

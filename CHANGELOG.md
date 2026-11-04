@@ -14,7 +14,7 @@
   CLI `ddir release` 仍只释放自己的（D22）。托盘进程身份与 CLI 无关，按身份过滤会让按钮变成空操作
 - `ddir autostart on|off|status`：`~/Library/LaunchAgents/com.ddir.mac.tray.plist` +
   `launchctl bootstrap/bootout gui/$UID`；实测 LaunchAgent 启动的进程同样 `accessibility=true`
-- `mac/test.sh` 扩到 20 项（含托盘菜单接线检查）
+- `mac/test.sh` 扩到 32 项：新增 auto 武装/最小化/撤销、焦点令牌、两 Agent 并发抢同一窗口（恰好 1 胜）、过期租约不挡新 claim、托盘菜单接线
 - 已知问题：Windows `src/tray.rs` 的 `release_all()` 同样只释放托盘自身租约，待修
 
 ## 0.7.3 - 2026-11-04

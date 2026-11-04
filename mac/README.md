@@ -6,7 +6,7 @@ Swift 6 单文件 CLI（`swiftc` 直接编译，无 SPM / 无第三方依赖）�
 ```bash
 ./build.sh                # 编译 + 组装 Ddir.app + ddir-dev 签名 + 安装 ~/.local/bin/ddir
 ./build.sh --no-install   # 只编译到 build/ddir-mac
-./test.sh                 # 20 项验收（只动 TextEdit 和它自己开的窗口）
+./test.sh                 # 32 项验收（只动 TextEdit 和它自己开的窗口）
 ```
 
 | 文件 | 作用 |

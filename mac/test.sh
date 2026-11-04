@@ -112,7 +112,49 @@ OWNED=$("$DDIR" claim --needs "a.txt" --force >/dev/null; "$DDIR" list --text | 
 check "close needs own" "$("$DDIR" close --window "$OWNED" | json 'd["error"]')" "not_owned"
 "$DDIR" release >/dev/null
 
-# 8. tray wiring (read-only: builds the NSMenu tree, does not start the agent)
+# 8. auto pipeline: arm -> minimize -> undo (auto_close=minimize, never closes windows)
+win_field() { ddir_list | python3 -c 'import json,sys
+d=json.load(sys.stdin)
+print(next((w[sys.argv[2]] for w in d["windows"] if w["hwnd"]==sys.argv[1]), "missing"))' "$1" "$2"; }
+"$DDIR" mode auto >/dev/null
+"$DDIR" config auto_close minimize >/dev/null
+ARMED="$("$DDIR" auto on --seconds 1 2>/dev/null | tail -1)"
+check "auto armed" "$(echo "$ARMED" | json 'd["armed"]')" "True"
+MIN="$("$DDIR" auto close --app "a.txt" 2>/dev/null | tail -1)"
+check "auto close minimized 1" "$(echo "$MIN" | json 'd["closed"]')" "1"
+sleep 0.5
+check "window is minimized" "$(win_field "$A" minimized)" "True"
+UD="$("$DDIR" auto undo | json 'd["relaunched"]')"
+[ "$UD" -ge 1 ] && ok "auto undo restored ($UD)" || bad "auto undo restored" "got $UD"
+sleep 0.8
+check "window no longer minimized" "$(win_field "$A" minimized)" "False"
+"$DDIR" config auto_close off >/dev/null
+"$DDIR" mode semi >/dev/null
+
+# 9. focus token: only one holder at a time
+check "focus acquire" "$(DDIR_AGENT=ft-a "$DDIR" focus --seconds 60 | json 'd["ok"]')" "True"
+check "focus denied to other" "$(DDIR_AGENT=ft-b "$DDIR" focus | json 'd["error"]')" "focus_denied"
+check "focus release" "$(DDIR_AGENT=ft-a "$DDIR" focus release | json 'd["ok"]')" "True"
+check "focus re-acquire by b" "$(DDIR_AGENT=ft-b "$DDIR" focus --seconds 5 | json 'd["ok"]')" "True"
+DDIR_AGENT=ft-b "$DDIR" focus release >/dev/null
+
+# 10. concurrency: two agents claiming the same window -> exactly one wins, atomically
+"$DDIR" release >/dev/null 2>&1
+( DDIR_AGENT=race-a "$DDIR" claim --needs "a.txt" --force > /tmp/ddir-race-a.json ) &
+( DDIR_AGENT=race-b "$DDIR" claim --needs "a.txt" --force > /tmp/ddir-race-b.json ) &
+wait
+WINS=$(python3 -c "import json;print(sum(1 for f in ('/tmp/ddir-race-a.json','/tmp/ddir-race-b.json') if json.load(open(f)).get('ok')))")
+check "exclusive claim: one winner" "$WINS" "1"
+check "exclusive claim: loser code" "$(python3 -c "import json;d=[json.load(open(f)) for f in ('/tmp/ddir-race-a.json','/tmp/ddir-race-b.json')];print([x.get('error') for x in d if not x.get('ok')][0])")" "window_owned_by"
+DDIR_AGENT=race-a "$DDIR" release >/dev/null 2>&1; DDIR_AGENT=race-b "$DDIR" release >/dev/null 2>&1
+
+# 11. an expired lease must not block a new claim
+"$DDIR" release >/dev/null 2>&1
+printf '%s\tstale-agent\tmove\t0,0,100,100\t0,0,100,100\t1\tls_dead\tnormal\t1\n' "$A" >> "$DDIR_HOME/leases.tsv"
+check "expired lease ignored" "$(DDIR_AGENT=fresh "$DDIR" claim --needs "a.txt" --force | json 'd["ok"]')" "True"
+DDIR_AGENT=fresh "$DDIR" release >/dev/null 2>&1
+
+# 12. tray wiring (read-only: builds the NSMenu tree, does not start the agent)
 TRAY="$("$DDIR" tray --check)"
 check "tray --check ok" "$(echo "$TRAY" | json 'd["ok"]')" "True"
 check "tray menu has 模式" "$(echo "$TRAY" | json 'any(i.get("title")=="模式" for i in d["menu"])')" "True"

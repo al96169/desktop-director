@@ -1,0 +1,25 @@
+:root { color-scheme: dark; --bg:#070b12; --card:#0f1724; --line:#1d2b40; --text:#dbe8ff; --dim:#6f89a8; --accent:#39f6ff; --amber:#ffcb45; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.55 -apple-system,"SF Pro Text",Inter,system-ui,sans-serif; }
+.shell { min-height:100vh; display:flex; flex-direction:column; }
+.nav { display:flex; align-items:center; gap:26px; padding:18px 30px; border-bottom:1px solid var(--line); background:#080d15; }
+.brand { letter-spacing:4px; font-weight:700; }
+.brand span { color:var(--accent); }
+.nav nav { display:flex; gap:18px; }
+.nav a { color:var(--dim); text-decoration:none; font-size:13px; letter-spacing:1px; padding-bottom:3px; }
+.nav a.on { color:var(--accent); border-bottom:2px solid var(--accent); }
+.clock { margin-left:auto; color:var(--dim); font-size:11px; letter-spacing:2px; }
+main { flex:1; padding:26px 30px; }
+.banner { border:1px solid var(--line); background:linear-gradient(120deg,#0b1524,#121c2e 55%,#0a1220); border-radius:18px; padding:34px 30px; margin-bottom:24px; }
+.banner h1 { margin:0 0 8px; font-size:34px; letter-spacing:2px; }
+.banner p { margin:0; color:var(--dim); max-width:60ch; }
+.grid { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+.card { position:relative; border:1px solid var(--line); background:var(--card); border-radius:14px; padding:20px; }
+.card .tag { position:absolute; top:14px; right:14px; font-size:10px; letter-spacing:2px; color:#0a0f18; background:var(--amber); padding:2px 8px; border-radius:999px; }
+.card h3 { margin:6px 0 10px; font-size:18px; }
+.card .price { color:var(--accent); font-size:22px; margin:0 0 16px; }
+.card button { border:1px solid var(--line); background:#0a121e; color:var(--text); border-radius:9px; padding:8px 14px; font-size:13px; cursor:pointer; }
+.about { max-width:70ch; }
+.about h2 { font-size:26px; }
+.about p { color:var(--dim); }
+footer { display:flex; justify-content:space-between; padding:14px 30px; border-top:1px solid var(--line); color:var(--dim); font-size:11px; letter-spacing:1px; }

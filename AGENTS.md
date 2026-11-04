@@ -13,13 +13,16 @@
    - 关闭只能 `ddir close --window <hwnd>`，且必须先 `own`；绝不 `taskkill` / `Stop-Process`
    - `--rect` 一定加引号：`--rect "0,0,1280,918"`
 3. 改代码时：`docs/decisions.md` 是已定结论，别重新讨论；`docs/protocol.md` 是协议契约。
+   macOS 的 window-id 是 `pid:CGWindowNumber`（不是 hwnd），`hide` 只能整应用——见 `docs/macos-backend.md`。
 4. 提交信息用 Conventional Commits（`feat:` / `fix:` / `docs:` / `test:` / `chore:`）。
 
 ## 目录速览
 
 | 路径 | 用途 |
 |---|---|
-| `prompts/AGENTS.m0.md` | M0 提示词安装版（贴进全局指令用） |
+| `prompts/AGENTS.m0.md` | M0 提示词安装版（贴进全局指令用，v1.8 跨平台） |
+| `mac/` | **macOS 后端**（Swift + AX）：`build.sh` 编译/签名/安装，`test.sh` 15 项验收 |
+| `docs/macos-backend.md` | macOS 平台事实、与 Windows 的差异、已知边界 |
 | `tools/ddir.ps1` | 参考实现（零依赖 PowerShell；Rust 版见 `src/`） |
 | `docs/plan.md` | 开发规划与 Gate |
 | `docs/protocol.md` | 协议草案（claim/own/close/displays + 错误码） |

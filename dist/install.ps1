@@ -1,8 +1,9 @@
-# install.ps1 - install ddir (Windows) and optionally wire the agent prompt.
-# Usage:  powershell -ExecutionPolicy Bypass -File install.ps1 [-WithPrompt] [-Mode semi]
+﻿# install.ps1 - install ddir (Windows) and optionally wire the agent prompt.
+# Usage:  powershell -ExecutionPolicy Bypass -File install.ps1 [-WithPrompt] [-Mode semi] [-Autostart]
 param(
     [switch]$WithPrompt,
-    [ValidateSet('off', 'semi', 'auto')] [string]$Mode = 'semi'
+    [ValidateSet('off', 'semi', 'auto')] [string]$Mode = 'semi',
+    [switch]$Autostart
 )
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -10,6 +11,8 @@ $dest = Join-Path $env:LOCALAPPDATA 'ddir\bin'
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
 Copy-Item (Join-Path $here 'ddir.exe') $dest -Force
+$ico = Join-Path $here 'ddir.ico'
+if (Test-Path $ico) { Copy-Item $ico (Join-Path $dest 'ddir.ico') -Force }
 @"
 @echo off
 "%~dp0ddir.exe" %*
@@ -31,6 +34,10 @@ Set-Content -Path (Join-Path $home_dir 'mode.txt') -Value $Mode -Encoding ASCII 
 Write-Host "[ddir] mode = $Mode"
 
 # verify
+if ($Autostart) {
+    & (Join-Path $dest 'ddir.exe') autostart on | Out-Null
+    Write-Host '[ddir] autostart enabled (HKCU\...\Run\ddir-tray)'
+}
 & (Join-Path $dest 'ddir.exe') version
 & (Join-Path $dest 'ddir.exe') selftest | Select-Object -Last 3
 

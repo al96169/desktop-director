@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Design references — Nova Store</title>
+<style>
+:root{--bg:#080b11;--line:#1b2434;--text:#dbe8ff;--dim:#7089a8;--accent:#39f6ff;--amber:#ffcb45}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 -apple-system,Inter,system-ui,sans-serif}
+header{padding:20px 30px;border-bottom:1px solid var(--line);display:flex;gap:18px;align-items:baseline}
+h1{margin:0;font-size:18px;letter-spacing:3px}
+header span{color:var(--dim);font-size:12px;letter-spacing:2px}
+main{display:grid;grid-template-columns:1.15fr .85fr;gap:22px;padding:24px 30px}
+.shot{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0c1420}
+.shot img{display:block;width:100%}
+.side{display:flex;flex-direction:column;gap:18px}
+.panel{border:1px solid var(--line);border-radius:14px;padding:18px;background:#0b1220}
+.panel h2{margin:0 0 12px;font-size:12px;letter-spacing:3px;color:var(--accent)}
+.sw{display:flex;gap:10px;flex-wrap:wrap}
+.sw i{width:54px;height:54px;border-radius:10px;display:block;border:1px solid #22334a}
+.type p{margin:6px 0;color:var(--dim)}
+.type b{color:var(--text);font-size:22px;letter-spacing:1px;display:block}
+.notes{color:var(--dim);font-size:12px;line-height:1.8}
+</style></head>
+<body>
+<header><h1>DESIGN REFERENCES</h1><span>NOVA STORE · v0.3 · 2026-11</span></header>
+<main>
+  <section class="shot"><a href="design/mock-mobile.png" target="_blank"><img src="design/mock-mobile.png" alt="mobile mockup"></a></section>
+  <aside class="side">
+    <div class="panel"><h2>PALETTE</h2><div class="sw">
+      <i style="background:#070b12"></i><i style="background:#0f1724"></i><i style="background:#1d2b40"></i>
+      <i style="background:#39f6ff"></i><i style="background:#ffcb45"></i><i style="background:#dbe8ff"></i>
+    </div></div>
+    <div class="panel type"><h2>TYPE</h2><b>Display / 38 · -1%</b><p>Body / 15 · 1.55 · #dbe8ff</p><p>Mono / 11 · 3px tracking · accent</p></div>
+    <div class="panel notes"><h2>NOTES</h2>
+      <p>· Cards float on a near-black canvas, 1px hairline borders, 14px radius.</p>
+      <p>· Accent used sparingly: prices, active tab, focus rings.</p>
+      <p>· Mockups: mobile checkout, dashboard, palette board.</p>
+    </div>
+  </aside>
+</main>
+</body></html>

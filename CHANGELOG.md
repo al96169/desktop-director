@@ -1,5 +1,12 @@
 ﻿# Changelog
 
+## 0.8.1 - 2026-11-05
+
+- 托盘图标：新增 `assets/ddir.ico`（深色圆角 + 三列布局，16/24/32/48/64/128/256 多尺寸），
+  托盘优先从 exe 同目录 / `%LOCALAPPDATA%\ddir\bin\ddir.ico` 加载，日志里有 `icon: loaded ...`
+- `install.ps1` 新增 `-Autostart`：安装时顺便写 `HKCU\...\Run\ddir-tray`；同时复制 `ddir.ico`
+- 图标生成脚本 `tools/make-icon.py`（Pillow），可改色/改形状后重生成
+
 ## 0.11.3 - 2026-11-05
 
 **多路原生播放 + 新会话实测反馈修复**

@@ -1,7 +1,7 @@
 ﻿[package]
 name = "ddir"
 # Windows 线：0.8.0（main）。macOS 线单独编号：mac/Sources/Util.swift VERSION = 0.11.3
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 description = "Desktop Director - lease-based window/software orchestration for AI agents"
 license = "MIT"

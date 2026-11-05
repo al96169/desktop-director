@@ -1,4 +1,4 @@
-//! Native Win32 tray for ddir (no external crates).
+﻿//! Native Win32 tray for ddir (no external crates).
 
 use crate::{autostart_on, autostart_set, release_all, store, win};
 use std::ffi::c_void;
@@ -22,6 +22,9 @@ const NIM_MODIFY: u32 = 1;
 const NIM_DELETE: u32 = 2;
 const NIF_MESSAGE: u32 = 0x01;
 const NIF_ICON: u32 = 0x02;
+const IMAGE_ICON: u32 = 1;
+const LR_LOADFROMFILE: u32 = 0x0010;
+const LR_DEFAULTSIZE: u32 = 0x0040;
 const NIF_TIP: u32 = 0x04;
 const NIF_INFO: u32 = 0x10;
 const NIIF_INFO: u32 = 0x01;
@@ -112,6 +115,7 @@ extern "system" {
     fn TranslateMessage(msg: *const Msg) -> i32;
     fn DispatchMessageW(msg: *const Msg) -> isize;
     fn LoadIconW(inst: isize, name: isize) -> isize;
+    fn LoadImageW(inst: isize, name: *const u16, typ: u32, cx: i32, cy: i32, flags: u32) -> isize;
     fn LoadCursorW(inst: isize, name: isize) -> isize;
     fn CreatePopupMenu() -> isize;
     fn DestroyMenu(menu: isize) -> i32;
@@ -169,6 +173,30 @@ fn tip_text() -> String {
     format!("ddir - {} - {} lease(s)", store::mode(), leases_count())
 }
 
+fn load_app_icon() -> isize {
+    // icon ships next to the exe (or in %LOCALAPPDATA%\ddir\bin); fall back to the system icon
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("ddir.ico"));
+        }
+    }
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        candidates.push(std::path::Path::new(&local).join("ddir").join("bin").join("ddir.ico"));
+    }
+    for path in candidates {
+        if !path.exists() { tlog(&format!("icon: {} not found", path.display())); continue; }
+        let w = wide(&path.to_string_lossy());
+        unsafe {
+            let h = LoadImageW(0, w.as_ptr(), IMAGE_ICON, 32, 32, LR_LOADFROMFILE | LR_DEFAULTSIZE);
+            if h != 0 { tlog(&format!("icon: loaded 32px from {}", path.display())); return h; }
+            let h16 = LoadImageW(0, w.as_ptr(), IMAGE_ICON, 16, 16, LR_LOADFROMFILE);
+            if h16 != 0 { tlog(&format!("icon: loaded 16px from {}", path.display())); return h16; }
+        }
+    }
+    tlog("icon: falling back to the system application icon");
+    unsafe { LoadIconW(0, IDI_APPLICATION) }
+}
 unsafe fn add_icon(hwnd: Hwnd) -> NotifyIconDataW {
     let mut nid: NotifyIconDataW = std::mem::zeroed();
     nid.cb_size = std::mem::size_of::<NotifyIconDataW>() as u32;
@@ -176,7 +204,7 @@ unsafe fn add_icon(hwnd: Hwnd) -> NotifyIconDataW {
     nid.uid = 1;
     nid.uflags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     nid.callback_message = TRAY_MSG;
-    nid.hicon = LoadIconW(0, IDI_APPLICATION);
+    nid.hicon = load_app_icon();
     fill_tip(&mut nid.sz_tip, &tip_text());
     let r = Shell_NotifyIconW(NIM_ADD, &nid);
     tlog(&format!("NIM_ADD ret={} size={} tip={}", r, nid.cb_size, tip_text()));
@@ -414,7 +442,7 @@ extern "system" fn wnd_proc(hwnd: Hwnd, msg: u32, wp: usize, lp: isize) -> isize
                     nid.cb_size = std::mem::size_of::<NotifyIconDataW>() as u32;
                     nid.hwnd = hwnd;
                     nid.uid = 1;
-                    nid.hicon = LoadIconW(0, IDI_APPLICATION);
+                    nid.hicon = load_app_icon();
                     if wm == WM_LBUTTONDBLCLK {
                         balloon(&mut nid, "ddir", &format!("{} · 双击已刷新", tip_text()));
                     } else {

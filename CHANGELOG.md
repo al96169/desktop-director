@@ -1,5 +1,13 @@
 ﻿# Changelog
 
+## 0.8.2 - 2026-11-06
+
+- 新增 **`show_policy` 演示策略**：`always`（始终演示）/ `prefer`（尽量演示）/ `auto`（按需，默认）/ `critical`（关键才演示）
+- `ddir policy` 读取，`ddir policy <值>` 修改，带中文说明；`ddir config` 也列出
+- `ddir status` 输出 `show_policy`
+- 提示词 v2.1：新增「演示策略」一节，要求 Agent **每次接任务先读 `ddir policy`**，并给出四档的具体行为
+- 修复合并后丢失的 `status.focus_holder`（之前恒为 none）
+
 ## 0.8.1 - 2026-11-05
 
 - 托盘图标：新增 `assets/ddir.ico`（深色圆角 + 三列布局，16/24/32/48/64/128/256 多尺寸），

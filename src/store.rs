@@ -231,6 +231,11 @@ pub fn config_set(key: &str, value: &str) -> Result<(), String> {
                 return Err("auto_close must be off|minimize|close".into());
             }
         }
+        "show_policy" => {
+            if !["always", "prefer", "auto", "critical"].contains(&value) {
+                return Err("show_policy must be always|prefer|auto|critical".into());
+            }
+        }
         "presentation" => {
             if !["instant", "paced"].contains(&value) {
                 return Err("presentation must be instant|paced".into());

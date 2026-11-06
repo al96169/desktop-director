@@ -1,4 +1,4 @@
-﻿//! ddir - Desktop Director (Windows backend, v0.1)
+//! ddir - Desktop Director (Windows backend, v0.1)
 //! Lease-based window / software orchestration for AI agents.
 
 mod present;
@@ -287,7 +287,7 @@ fn cmd_status() -> i32 {
         .collect();
     let (idle, moved, fg, active) = activity();
     println!(
-        "{{\"ok\":true,\"platform\":\"windows\",\"mode\":\"{}\",\"you\":\"{}\",\"leases\":{},\"lease\":\"{}\",\"windows\":[{}],\"held_by_others\":{},\"owns\":[{}],\"focus_holder\":\"none\",\"input_age_s\":{},\"user_active\":{},\"cursor_moved_px\":{},\"foreground_changed\":{},\"version\":\"{}\",\"caps\":{}}}",
+        "{{\"ok\":true,\"platform\":\"windows\",\"mode\":\"{}\",\"you\":\"{}\",\"leases\":{},\"lease\":\"{}\",\"windows\":[{}],\"held_by_others\":{},\"owns\":[{}],\"focus_holder\":\"{}\",\"show_policy\":\"{}\",\"input_age_s\":{},\"user_active\":{},\"cursor_moved_px\":{},\"foreground_changed\":{},\"version\":\"{}\",\"caps\":{}}}",
         store::mode(),
         esc(&me),
         mine.len(),
@@ -295,6 +295,8 @@ fn cmd_status() -> i32 {
         wins.join(","),
         others,
         owns.join(","),
+        esc(&focus_holder().map(|(h, _)| h).unwrap_or_else(|| "none".into())),
+        esc(&store::config_get("show_policy").unwrap_or_else(|| "auto".into())),
         idle,
         active,
         moved,
@@ -1023,11 +1025,40 @@ fn cmd_auto(args: &[String]) -> i32 {
     }
     0
 }
+fn policy_meaning(p: &str) -> &'static str {
+    match p {
+        "always" => "每一步都要露出来：每个 claim 都让用户看见，做完才 release",
+        "prefer" => "尽量露：主结果和关键中间态都给用户看，次要窗口可以收起来",
+        "auto" => "按需：你自己判断什么时候该给用户看（默认）",
+        "critical" => "关键才露：只有不可逆/要授权/最终结果才展示，其余在后台做",
+        _ => "",
+    }
+}
+
+fn cmd_policy(args: &[String]) -> i32 {
+    let pos = positional(args);
+    if let Some(v) = pos.first() {
+        match store::config_set("show_policy", v) {
+            Ok(_) => {
+                store::log(&format!("show_policy -> {}", v));
+                println!("{{\"ok\":true,\"show_policy\":\"{}\",\"meaning\":\"{}\"}}", esc(v), esc(policy_meaning(v)));
+            }
+            Err(e) => println!("{{\"ok\":false,\"error\":\"{}\",\"choices\":[\"always\",\"prefer\",\"auto\",\"critical\"]}}", esc(&e)),
+        }
+        return 0;
+    }
+    let p = store::config_get("show_policy").unwrap_or_else(|| "auto".into());
+    println!("{{\"ok\":true,\"show_policy\":\"{}\",\"meaning\":\"{}\",\"choices\":[\"always\",\"prefer\",\"auto\",\"critical\"]}}", esc(&p), esc(policy_meaning(&p)));
+    0
+}
+
 fn cmd_config(args: &[String]) -> i32 {
     let pos = positional(args);
     if pos.is_empty() {
         let mut all = store::config_all();
-        for (k, v) in [("auto_close", "off"), ("countdown_seconds", "10")] {
+        for (k, v) in [("auto_close", "off"), ("countdown_seconds", "10"),
+                       ("presentation", "instant"), ("step_ms", "400"),
+                       ("show_policy", "auto")] {
             if !all.iter().any(|(key, _)| key == k) {
                 all.push((k.to_string(), v.to_string()));
             }
@@ -1277,6 +1308,7 @@ fn usage() {
     println!("  ddir focus [--seconds N] | focus release   focus token");
     println!("  ddir auto status|plan|on|close|undo    auto-mode pipeline");
     println!("  ddir config [key value]                view/update config");
+    println!("  ddir policy [always|prefer|auto|critical]   how much the agent should show");
     println!("  ddir log [--lines N]                   tail ~/.ddir/ddir.log");
     println!("  ddir flush                             drain the paced presentation queue");
     println!("  ddir demo                              scripted demo (opens/closes its own windows)");
@@ -1316,6 +1348,7 @@ fn main() {
         "autostart" => cmd_autostart(rest),
         "auto" => cmd_auto(rest),
         "config" => cmd_config(rest),
+        "policy" => cmd_policy(rest),
         "doctor" => cmd_doctor(),
         "flush" => cmd_flush(),
         "heartbeat" | "hb" => cmd_heartbeat(),

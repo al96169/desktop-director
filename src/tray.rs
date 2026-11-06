@@ -54,6 +54,7 @@ const CMD_LOG: usize = 108;
 const CMD_AC_OFF: usize = 109;
 const CMD_AC_MIN: usize = 110;
 const CMD_AC_CLOSE: usize = 111;
+const CMD_POLICY_BASE: usize = 120;
 const CMD_DISPLAY_BASE: usize = 200;
 static mut DISPLAY_IDS: Vec<String> = Vec::new();
 
@@ -258,6 +259,16 @@ unsafe fn build_menu() -> isize {
     menu_item_str(acmenu, MF_STRING | if ac == "close" { MF_CHECKED } else { 0 }, CMD_AC_CLOSE, "close（允许关闭，需先武装）");
     let acw = wide("自动关闭");
     AppendMenuW(menu, MF_POPUP, acmenu as usize, acw.as_ptr());
+    // 演示策略（show_policy）
+    let policy = store::config_get("show_policy").unwrap_or_else(|| "auto".into());
+    let pmenu = CreatePopupMenu();
+    for (i, (val, label)) in [("always", "始终演示"), ("prefer", "尽量演示"),
+                              ("auto", "按需演示"), ("critical", "关键演示")].iter().enumerate() {
+        menu_item_str(pmenu, MF_STRING | if policy == *val { MF_CHECKED } else { 0 },
+                      CMD_POLICY_BASE + i, label);
+    }
+    let pw = wide("演示策略");
+    AppendMenuW(menu, MF_POPUP, pmenu as usize, pw.as_ptr());
     menu_item_str(menu, MF_STRING, CMD_LOG, "查看日志");
     let dmenu = CreatePopupMenu();
     let mut dmap: Vec<String> = Vec::new();
@@ -317,6 +328,15 @@ unsafe fn show_menu(hwnd: Hwnd, nid: &mut NotifyIconDataW) {
             let enabled = autostart_set(!now);
             refresh_icon(nid);
             balloon(nid, "ddir", if enabled { "已设置开机自启" } else { "已取消开机自启" });
+        }
+        c if c >= CMD_POLICY_BASE && c < CMD_POLICY_BASE + 4 => {
+            let vals = ["always", "prefer", "auto", "critical"];
+            let labels = ["始终演示", "尽量演示", "按需演示", "关键演示"];
+            let idx = c - CMD_POLICY_BASE;
+            let _ = store::config_set("show_policy", vals[idx]);
+            store::log(&format!("tray: show_policy -> {}", vals[idx]));
+            refresh_icon(nid);
+            balloon(nid, "ddir", &format!("演示策略：{}", labels[idx]));
         }
         c if c >= CMD_DISPLAY_BASE => {
             let idx = c - CMD_DISPLAY_BASE;

@@ -94,6 +94,7 @@ target\release\ddir.exe selftest
 | `auto_close` | `off` / `minimize` / `close` | **off** | auto 档是否动软件窗口：永不关 / 最小化代替关闭 / 允许 `WM_CLOSE` |
 | `countdown_seconds` | 0–300 | 10 | `ddir auto on` 的武装倒计时 |
 | `presentation` | `instant` / `paced` | **instant** | 操作后立刻上屏（机器速度）/ 入队按节拍上屏（人看得清） |
+| `show_policy` | `always` / `prefer` / `auto` / `critical` | **auto** | 用户希望看到多少：始终演示 / 尽量演示 / 按需演示 / 关键演示 |
 | `step_ms` | 50–5000 | 400 | `paced` 时每个动作的间隔 |
 
 日志 `~/.ddir/ddir.log`：每条命令一行（时间 + 动作），`ddir log --lines 40` 查看，托盘右键「查看日志」也能打开。超过 2MB 自动轮转成 `ddir.log.1`。

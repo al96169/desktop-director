@@ -1,6 +1,6 @@
-# Desktop Director（ddir）— 窗口编排规矩
+﻿# Desktop Director（ddir）— 窗口编排规矩
 
-> 安装版 v2.0（2026-11-05）。适用任何接入本机的 Agent；不依赖具体 Harness。Windows / macOS 同一套命令。
+> 安装版 v2.1（2026-11-06，加入 show_policy 演示策略）。适用任何接入本机的 Agent；不依赖具体 Harness。Windows / macOS 同一套命令。
 > 安装方式：把本文件整段贴进你所用的全局指令（`~/.dsh/AGENTS.md`、`CLAUDE.md`、`AGENTS.md` 等）。
 > 详细设计见仓库 `prompts/AGENTS.ddir.md`，命令全集见 `ddir help`。
 
@@ -18,6 +18,7 @@
 ddir mode                  # off / semi / auto
 ddir displays              # 哪些屏归你（managed）；其余是用户的
 ddir status                # 我的租约、我负责的软件、焦点令牌、用户是否在动
+ddir policy                # 演示策略：always / prefer / auto / critical（接任务先读）
 ```
 
 ## 平台差异（先看 `ddir status` 的 `caps`）
@@ -102,7 +103,26 @@ ddir disown --app "Code"     # 干完还回去
 - **`move` 会记租约**：`ddir move --force` 之后 `ddir release` 能还原（不要用完 move 就忘了收队）。
 - 演示前确认 `ddir mode` 不是 `off`（off 时写操作一律被拒）；演完切回 `off`。
 
-## 判断"要不要给用户看"
+## 演示策略（每次任务开始先读一次）
+
+```
+ddir policy     # always / prefer / auto / critical
+```
+
+用户用这个值告诉你"他想看到多少"。**接任务先读一次**，然后按下面执行：
+
+| 策略 | 值 | 你要做的 |
+|---|---|---|
+| 始终演示 | `always` | 每一步都 claim 出来给用户看，这一步做完才 release；中间结果也要露；能用 `presentation=paced` 就慢慢放 |
+| 尽量演示 | `prefer` | 主结果 + 关键中间态露出，次要窗口 hide；拿不准时选"露" |
+| 按需演示 | `auto` | 按下面"判断要不要给用户看"自行决定（默认） |
+| 关键演示 | `critical` | 只有不可逆 / 要授权 / 最终结果才露（close、auto、安装、删除、支付、提交、发布）；其余在后台做，最后给一句话摘要 |
+
+- 读不到这个值（旧版本）→ 按 `auto` 处理
+- 策略与"严禁"或安全规则冲突时，**安全规则优先**
+- 用户没改过就是 `auto`，不要自己替他改；要改先问
+
+## 判断"要不要给用户看"（策略为 `auto` 时）
 
 - 用户要看结果（截图、对比、渲染、网页）→ 必须露出来，给足面积
 - 中间态（编译日志、扫描进度）→ 只在失败时露出
